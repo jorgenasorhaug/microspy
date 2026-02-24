@@ -2,6 +2,8 @@
 
 #### A HyperSpy-based analysis package for particle analysis
 
+The intention with this python package is to have an alternative analysis tool for analysing particles' geometry and composition acquired using Jeol's Particle Analysis software: https://www.jeolusa.com/PRODUCTS/Elemental-Analysis/Embedded-EDS-for-SEM/Particle-Analysis-3
+
 [How to install](#how-to-install "How to install") - 
 [How to use](#how-to-use "How to use") - 
 [Documentation](#documentation "Documentation") - 
