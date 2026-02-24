@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "microspy"
-version = "0.1.0!
+version = "0.1.0"
 description = "Particle analysis with the HyperSpy/eXSpy framework"
 requires-python = ">=3.12"
 readme = "README.md"
@@ -42,13 +42,8 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
+    "hyperspy         >= 0.3.0",
     "exspy            >= 0.3.2",
-    "matplotlib       >= 3.5",
-    "numpy"           >= 2.1.2,
     "pandas	      >= 2.2.3",
-    "scikit-image     >= 0.24.0",
-    "scikit-learn     >= 1.7.2",
-    "scipy            >= 1.16.2",
-    "tqdm             >= 4.67.1",
     "tabulate         >= 0.9.0",
 ]
