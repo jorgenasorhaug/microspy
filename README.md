@@ -3,7 +3,7 @@
 #### A HyperSpy-based analysis package for particle analysis
 
 [How to install]\[#how-to-install "Hot to install") - 
-[How to use](#how-to-use "Hot to use") - 
+[How to use](#how-to-use "How to use") - 
 [Documentation](#documentation "Documentation") - 
 
 ## Hot to install
