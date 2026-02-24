@@ -1,18 +1,18 @@
 # microspy
 
-A HyperSpy-based analysis package for particle analysis
+\#### A HyperSpy-based analysis package for particle analysis
 
 
 
-\[How to install]\[#how-to-install "Hot to install") •
+\[How to install]\[#how-to-install "Hot to install") - 
 
-\[How to use](#hot-to-use "Hot to use") •
+\[How to use](#hot-to-use "Hot to use") - 
 
-\[Documentation](#documentation "Documentation") •
+\[Documentation](#documentation "Documentation") - 
 
 
 
-\## Hot to install 
+\## Hot to install
 
 * microspy can be installed from PyPi (?): 'pip install microspy'
 
