@@ -16,15 +16,18 @@
 from . import (
     io,
     signals,
+    data,
 )
+
 from .io._io import load
 
+# Define the public API of the module
 __all__ = [
     # Functions
     "load",
     # Modules
-    #"data",
+    "data",
     "io",
-    #"signals",
+    "signals",
     #"simulations",
 ]
