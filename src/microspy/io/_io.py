@@ -807,19 +807,3 @@ def _load_images(path,
         print(f"Coudn't find directory: {folder}") 
 
         return [], [], []
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
