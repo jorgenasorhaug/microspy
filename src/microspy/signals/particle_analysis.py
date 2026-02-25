@@ -1,6 +1,3 @@
-# Particle analysis helping functions
-# Dependencies: hyperspy sub-module exspy and tabulate
-
 import numpy as np
 import pandas as pd
 from exspy.material import elements as ELEMENTS
@@ -9,7 +6,7 @@ from hyperspy.signals import Signal2D, Signal1D
 from tabulate import tabulate
 import warnings, os
 
-from src import _io, read_metadata, _utils, _images, _attribute_classes, _errors, _colouring, _image_utils
+from src import _io, read_metadata, _utils, _images, _attribute_signals, _errors, _colouring, _image_utils
 
 # tqdm(..., desc=" outer", position=0):
 
@@ -44,10 +41,10 @@ class ParticleAnalysis:
     def __init__(self, arg):
 
         # Make metadata structure:
-        self.metadata = _attribute_classes.metadata(arg)
+        self.metadata = _attribute_signals.metadata(arg)
         
         # Allocate Particles class
-        self.Particles = _attribute_classes.Particles(arg)
+        self.Particles = _signals_classes.Particles(arg)
 
         self.is_classified = self.Particles.classes != 'Unclassified'
         
