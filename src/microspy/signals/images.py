@@ -1,5 +1,6 @@
 import numpy as np
 from src import _io, _utils, _errors, _image_utils
+# REPLACE _ERRORS WITH HYPERSPY.utils.exceptions!!!
 from hyperspy.signals import Signal2D
 from matplotlib import pyplot as plt
 import warnings
