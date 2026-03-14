@@ -1,0 +1,5 @@
+name: JEOL
+description: Read/write support for Jeol's dataframe
+file_extensions: ['csv']
+manufacturer: Jeol
+footprints: []

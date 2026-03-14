@@ -1,11 +1,35 @@
+# Copyright 2026 The microspy developers
+#
+# This file is part of kikuchipy.
+#
+# microspy is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# microspy is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with microspy. If not, see <http://www.gnu.org/licenses/>.
+
 import pandas as pd
-import os, warnings, re
+import os, warnings, re, glob, importlib, yaml
 from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from src._utils import check_array_compatibility_with_new_datatype
+from src.microspy._utils._utils import check_array_compatibility_with_new_datatype
+from src.microspy.signals import particle_analysis 
+
+from src.microspy.io import plugins
+from src.microspy.signals import _microspy_signal
+
+from hyperspy._signals.signal1d import Signal1D
+from hyperspy._signals.signal2d import Signal2D
 
 numpy_image_datatypes = [
     np.bool_, np.byte, np.ubyte, 
@@ -14,6 +38,154 @@ numpy_image_datatypes = [
     np.float16, np.float32, np.float64
 ]
 
+def load(filename : str):
+    """Load the particle analysis resutls stored in the csv format from Jeol's
+    particle analysis.
+
+    This function is inspired by kikuchipy.
+
+    Parameters
+    ----------
+    filename
+        filename of the csv file
+
+    Returns
+    -------
+    out
+        microspy signal
+    """
+    
+    filename = str(filename)
+    
+    if not os.path.isfile(filename):
+        is_wildcard = False
+        filenames = glob.glob(filename)
+        if len(filenames) > 0:
+            is_wildcard = True
+        if not is_wildcard:
+            raise IOError(f"No filename matches {filename!r}")
+
+
+    """
+    extensions ...
+    readers ...
+    """
+    extension = os.path.splitext(filename)[-1].replace('.','')
+    plugin = 'csv'
+    
+    if extension == plugin:
+
+        file_reader = plugins.JEOLcsv._api.file_reader
+
+    else:
+        
+        raise IOError(
+            f"Could not read {filename!r}. If the file format is supported, please "
+            "report this error"
+        )
+    
+    signal_dicts = file_reader(filename)
+    #return signal_dicts
+    out = []
+    for signal in signal_dicts:
+        out.append(
+            _dict2signals(signal)
+        )
+        directory, filename = os.path.split(os.path.abspath(filename))
+        filename, extension = os.path.splitext(filename)
+        #out[-1].tmp_parameters.folder = directory
+        #out[-1].tmp_parameters.filename = filename
+        #out[-1].tmp_parameters.extension = extension.replace(".", "")
+    
+    if len(out) == 1: out = out[0]
+    return out
+
+def _dict2signals(signal_dict : dict,
+                 set_additional_data : bool = True):
+    """Create a signal instance from a dictionary.
+
+    Parameters
+    ----------
+    signal_dict
+        Signal dictionary with "data", "metadata", "original_metadata"
+        and axes keys. additional_data can also exist.
+    set_additional_data
+        Whether to set additional data that is likely not chemistry or 
+        geometry. Particle classes are expected to be found here. 
+    
+    Returns
+    -------
+    signal 
+        signal instance with at least "data", "metadata" and 
+        "original_metadata" keys.
+
+    Notes
+    -----
+    Inspired by :func:'kikuchipy.io._dict2signal'.
+    """
+
+    if not 'data' in signal_dict:
+        raise AttributeError("No data identified.")
+    
+    md = signal_dict['metadata'] if "metadata" in signal_dict else {}
+    omd = signal_dict['original_metadata'] if 'original_metadata' in signal_dict else {}
+        
+    if set_additional_data and 'additional_data' in signal_dict:
+        add_data = signal_dict['additional_data']
+    if 'axes' in signal_dict:
+        axes = signal_dict['axes']
+
+    out = []
+    
+    for signal_type in signal_dict['data'].keys():
+        
+        out.append(
+            _assign_signal_subclass(
+                signal_type = signal_type)(
+                signal_dict['data'][signal_type]['data'],
+                **{'units' : signal_dict['data'][signal_type]['units'],
+                   'props' : signal_dict['data'][signal_type]['props']
+                   }
+                )
+        )
+
+        # Set metadata
+        out[-1].metadata.add_dictionary(md)
+        out[-1].metadata.set_item("original_metadata", omd)
+
+    return out
+    
+
+def _assign_signal_subclass(
+    signal_type : str = ''):
+    """Return matching signal subclass given by signal_type
+
+    Parameters
+    ----------
+    signal_type
+        signal type
+
+    Returns
+    -------
+    signal_subclass
+    """
+    from src.microspy.signals._microspy_signals import MicroSpySignal1D, MicroSpySignal1D_Chemistry, MicroSpySignal1D_Geometry
+    
+    signal_subclasses = {
+        'general' : MicroSpySignal1D, 
+        'chemistry' : MicroSpySignal1D_Chemistry, 
+        'geometry' : MicroSpySignal1D_Geometry
+    }
+
+    if signal_type not in signal_subclasses.keys():
+
+        raise AttributeError(f"{signal_type} is not recognised.")
+
+    return signal_subclasses[signal_type.lower()]
+
+
+
+    
 
 def get_module_function_names(module):
     """Return a list of function names from module"""
@@ -24,304 +196,7 @@ def get_module_function_names(module):
             function_names.append(name)
     return function_names
 
-def _check_csv_filename(filename) -> bool:
-    """Helper function to check if the filename can be read"""
-    
-    is_file = os.path.isfile(filename)
 
-    read_filetype = os.path.splitext(filename)[-1]
-    
-    if is_file and read_filetype == '.csv' and 'Project name' in pd.read_csv(filename).keys(): return True 
-    
-    else: 
-
-        warnings.warn('File not recognised')
-        
-        return False
-
-def _read_number_of_particles_from_pandas_file(pandas_file) -> int:
-    """Get the number of particles probed during
-    particle analysis from the pandas file (csv)
-
-    Parameters
-    ----------
-    pands_file
-        Pandas file type
-
-    Returns
-    -------
-    number_of_particles 
-        
-    """
-    first_key = list(pandas_file.keys())[0]
-    
-    return len(pandas_file[first_key])
-
-def _read_number_of_particles_from_filename(filename) -> int:
-    """Get the number of particles probed during
-    particle analysis from the pandas file (csv)
-
-    Parameters
-    ----------
-    pands_file
-        Pandas file type
-
-    Returns
-    -------
-    number_of_particles 
-        
-    """
-    if _check_csv_filename(filename):
-
-        pandas_file = pd.read_csv(filename)
-        
-        first_key = list(pandas_file.keys())[0]
-        
-        return len(pandas_file[first_key])
-
-def get_number_of_particles(arg):
-    """Get the number of particles probed from particle analysis.
-
-    Parameters
-    ---------
-    arg 
-        filename string or pandas DataFrame
-
-    
-    Returns
-    -------
-        number_of_particles
-    """
-    if type(arg) == str: return _read_number_of_particles_from_filename(arg)
-
-    elif type(arg) == pd.core.frame.DataFrame: return _read_number_of_particles_from_pandas_file(arg)
-
-    else: warnings.warn('Argument not recognised')
-
-
-def _read_elements_from_csv(filename, keyword = "[Mass%]"):
-    """Read the elements stored in the particle analysis
-    result file (.csv)
-
-    Parameters
-    ----------
-    filename 
-        Name of .csv file
-
-    Returns
-    -------
-    filenames
-        List of filenames
-    """
-    filename = str(filename)
-    
-    if _check_csv_filename(filename):
-
-        s = pd.read_csv(filename)
-        
-        # Get identified elements from csv as a list
-        return [content.replace(' ' + keyword,'') for content in list(s.keys()) if keyword in content]
-        
-def _read_elements_from_pandas_file(pandas_file, keyword = "[Mass%]"):
-    """Alternative function to read_elements_from_csv. Here, the 
-    elements are extracted from a read pandas_file
-    
-    Parameters
-    ----------
-    pandas_file 
-        Pandas file with the elements to extract
-
-    Returns
-    -------
-    filenames
-        List of filenames
-    """
-    return [content.replace(' ' + keyword, '') for content in list(pandas_file.keys()) if keyword in content]
-
-def get_elements(arg):
-    """Get the elements identified during the particle analysis
-
-    Parameters
-    arg
-        Either filename of pandas DataFrame
-    
-    Returns
-    -------
-    elements 
-        list of identified elements
-    """
-    if type(arg) == str: return _read_elements_from_csv(arg)
-
-    elif type(arg) == pd.core.frame.DataFrame: return _read_elements_from_pandas_file(arg)
-
-    else: warnings.warn('Argument not identified')
-
-def _read_particles_composition_from_filename(filename, keyword = "[Mass%]"):
-    """Read the chemical composition of the particles from 
-    particle analysis. The order of the chemical composition is
-    identicla to the order of elements (see read-elements_from_csv)
-
-        Parameters
-    ----------
-    filename 
-        Name of .csv file
-
-    Returns
-    -------
-    compositions
-        Array of chemical compositions. 
-    """
-
-    filename = str(filename)
-
-    if _check_csv_filename(filename):
-
-        s = pd.read_csv(filename)
-
-        return _read_particles_composition_from_pandas(s)
-        
-def _read_particles_composition_from_pandas(pandas_file, keyword = "[Mass%]"):
-    """Alternative function to read_particles_composition. Here, the 
-    concentrations are extracted from a read pandas_file
-
-        Parameters
-    ----------
-    filename 
-        Name of .csv file
-
-    Returns
-    -------
-    compositions
-        Array of chemical compositions. 
-    """
-
-    elements = get_elements(pandas_file)
-
-    concentrations = []
-
-    # Get the particles' concentration of element elem
-    for elem in elements: 
-
-        arr = np.asarray(pandas_file[f"{elem} {keyword}"])
-
-        arr[np.isnan(arr)] = 0.0
-        
-        concentrations.append(arr)
-
-    return np.asarray(concentrations)
-
-def get_particles_composition(arg, unit = "[Mass%]"):
-    """Get the chemical composition of probed particles from
-    particle analysis
-
-    Parameters
-    ----------
-    arg
-        pandas DataFrame or filename string
-
-    Returns
-    -------
-    compositions
-        particles' chemical composition in the same order as the element list
-    """
-    if type(arg) == str: return _read_particles_composition_from_filename(arg, unit)
-    
-    elif type(arg) == pd.core.frame.DataFrame: return _get_particles_composition_from_pandas(arg, unit) 
-
-def get_unit(arg):
-    """Read the chemical composition unit stored in the csv file."""
-    chemical_unit = ''
-    
-    if type(arg) == str: s = pd.read_csv(arg)
-
-    elif type(arg) == pd.core.frame.DataFrame: s = arg
-
-    key_arguments = list(s.keys())
-
-    from exspy.material import elements as ELEMENTS
-
-    known_elements = list(ELEMENTS.as_dictionary())[1:]
-
-    for key in key_arguments:
-
-        if key.split(' ')[0] in known_elements: 
-            
-            chemical_unit = key.split(' ')[1]
-
-            break
-    
-    return chemical_unit
-    
-def _read_classes_from_pandas(pandas_file, keyword = 'Class name', class_dtype = '<U25'):
-    """Read stored classes from a filename (csv)
-
-    Parameters
-    ----------
-    filename 
-        .csv filename
-
-    Returns
-    -------
-    classes
-        List of classes
-    """
-
-    # Get classes:
-    classes = list(pandas_file[keyword])
-    
-    # Get unique class names
-    unique_classes = pandas_file[keyword].unique()
-
-    # Identify the non-classified classes:
-    for classname in unique_classes:
-
-        # Remove nan with a string-name
-        if type(classname) == float or pd.isna(classname):
-            
-            for i in range(len(classes)):
-
-                if type(classes[i]) == float: classes[i] = 'Unclassified'
-
-    return np.asarray(classes).astype(class_dtype)
-    
-def _read_classes_from_csv(filename):
-    """Read stored classes from a filename (csv)
-
-    Parameters
-    ----------
-    filename 
-        .csv filename
-
-    Returns
-    -------
-    classes
-        List of classes
-    """
-    filename = str(filename)
-
-    if _check_csv_filename(filename):
-
-        s = pd.read_csv(filename)
-
-        return _read_classes_from_pandas(s)    
-
-def get_classes(arg):
-    """Get classes from a pandas DataFrame or a 
-    filename referring to the csv file
-
-    Parameters
-    ---------
-    arg 
-        filename (str) to vsc file or pandas DataFrame
-
-    Returns
-    -------
-    classes
-        List of classes for each particle
-    """
-    if type(arg) == str: return _read_classes_from_csv(arg)
-
-    elif type(arg) == pd.core.frame.DataFrame: return _read_classes_from_pandas(arg)
 
 def _create_directory(path):
     """The function creates a directory in current directory
@@ -341,32 +216,6 @@ def _create_directory(path):
     
     except Exception as e: print(f"An error occurred: {e}")
 
-def _get_particles_geometry(arg, element_keyword = "[Mass%]"):
-    """Read measured geometries from particle analysis.
-
-    Parameters
-    ----------
-    arg
-        filename string or pandas object
-
-    element_keyword
-        Keyword not of interest to only get the geometric properties 
-
-    Returns
-    ------
-    
-    """
-    if type(arg) == str: s = pd.read_csv(arg)
-
-    else: s = arg
-    
-    key_arguments = [arg for arg in list(s.keys())[9:] if element_keyword not in arg]
-
-    key_content = dict()
-
-    for key in key_arguments: key_content[key] = np.array(s[key])
-
-    return key_content
 
 def get_subdirectories(path : str):
     """
@@ -807,3 +656,19 @@ def _load_images(path,
         print(f"Coudn't find directory: {folder}") 
 
         return [], [], []
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
