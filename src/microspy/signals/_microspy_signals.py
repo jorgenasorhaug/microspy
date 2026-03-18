@@ -1,5 +1,5 @@
 #
-# Copyright 2019-2026 the microspy developer(s)
+# Copyright 2026 the microspy developer(s)
 #
 # This file is part of microspy.
 #
@@ -36,12 +36,8 @@ ALLOWED_CHEMICAL_UNITS = [
     '[Wt %]', '[wt %]', '[Wt%]', '[wt%]', '[Wt. %]', '[wt. %]', '[Wt.%]', '[wt.%]']
 ]
 
-
-#class ParticleAnalysis:
-    
-
 ##################################################
-################ GENERAL CLASS ###################
+################# PARENT CLASS ###################
 ##################################################
 
 class MicroSpySignal1D(Signal1D):
@@ -79,6 +75,11 @@ class MicroSpySignal1D(Signal1D):
     def set_unit(self, units : list | str) -> None:
         """Set the signal unit"""
         self.metadata.Signal.units = units
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """Return the data shape: (num. particles | number of [properties])"""
+        return self.data.shape
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%% PRIVATE FUNCTIONS %%%%%%%%%%%%%%%%%%%
@@ -141,7 +142,15 @@ class MicroSpySignal1D(Signal1D):
         
         self.plot(vmax = 100) # vmax doesn't work...
         self.add_marker(markers)
-        
+
+
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%%% SUB-CLASSES %%%%%%%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
     """General class for tracking particles' chemistry 
@@ -165,11 +174,6 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
 
         self._remove_nans() # Remove nan values
         self._update_concentration() # Set total composition to 100 
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        """Return the data shape: (num. particles | number of elements)"""
-        return self.data.shape
 
     @property
     def elements(self) -> list[str, ...]:
@@ -410,5 +414,30 @@ class MicroSpySignal1D_Geometry(MicroSpySignal1D):
         self.metadata.Signal.signal_type = 'Geometry'
         self.metadata.Signal.props = kwargs.get('props')
 
+    @property
+    def elements(self) -> list[str, ...]:
+        """Return the stored elements"""
+        return self.metadata.Signal.prop
 
+    @property
+    def matrix_elements(self) -> list[str, ...]:
+        if not hasattr(self.metadata.Signal, "matrix_elements"):
+            raise AttributeError("The matrix composition has not been set.")
+        return self.metadata.Signal.matrix_elements
+
+    @property
+    def matrix_composition(self) -> list[float, ...]:
+        if not hasattr(self.metadata.Signal, "matrix_composition"):
+            raise AttributeError("The matrix composition has not been set.")
+        return self.metadata.Signal.matrix_composition
+        
+
+
+
+class Images:
+    def __init__(self) -> None:
+        print('Images')
+
+    def __repr__(self):
+        return('Fix me')
     

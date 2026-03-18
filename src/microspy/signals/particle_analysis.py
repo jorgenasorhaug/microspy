@@ -1,3 +1,22 @@
+#
+# Copyright 2026 the microspy developer(s)
+#
+# This file is part of microspy.
+#
+# microspy is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# microspy is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with microspy. If not, see <http://www.gnu.org/licenses/>.
+#
+
 import numpy as np
 import pandas as pd
 from exspy.material import elements as ELEMENTS
@@ -6,10 +25,16 @@ from hyperspy.signals import Signal2D, Signal1D
 from tabulate import tabulate
 import warnings, os
 
-from src import _io, read_metadata, _utils, _images, _attribute_signals, _errors, _colouring, _image_utils
+#from src.microspy.signals import _images, _attribute_classes 
+#from src.microspy.signals.util import _image_utils
+#from src.microspy.io import _io, _read_metadata
+#from src.microspy._utils import _utils
+
+#from src.microspy.signals._microspy_signals import MicroSpySignal1D
 
 # tqdm(..., desc=" outer", position=0):
 
+from hyperspy.misc import utils
 
 AVAILABLE_UNITS = [
     ['At %', 'At%', '[At %]','[At%]','At.%','[At.%]','at%', '[at%]','at.%','[at.%]',],
@@ -17,11 +42,300 @@ AVAILABLE_UNITS = [
 ]
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%% PA CLASS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+from src.microspy.signals._microspy_signals import MicroSpySignal1D_Chemistry, MicroSpySignal1D_Geometry
+
+class ParticleAnalysis:
+    """Particle analysis class
+
+    This class keeps track of microspy's signal classes for 
+    particles' chemistry and geometric properties, particle
+    classifications, etc.
+
+    Parameters
+    ----------
+
+    Structure
+    ---------
+    ParticleAnalysis
+    ├── MicroSpySignal1D_Chemistry/
+    ├── MicroSpySignal1D_Geometry/
+    └── MicrospySignal2D/
+        ├── Signal2D
+        └── Signal2D
+
+    Examples
+    --------
+    
+    """
+    def __init__(self, signals, **kwargs) -> None:
+
+        # Check if single signal is provided or not
+        if isinstance(signals, (MicroSpySignal1D_Geometry, MicroSpySignal1D_Chemistry)): 
+            signals = [signals]
+
+        # Set attributes
+        for signal in signals:
+            # Chemistry and geometry trackers:
+            setattr(self, signal.metadata.Signal.signal_type, signal)
+
+        # Set particle classification
+        classes = signals[0].metadata.Sample.classes.copy()
+        self._original_classes(classes = classes)
+        self._set_particle_classification(
+            class_array = classes, 
+            Unclassified_kw = kwargs.get('Unclassified_kw') if 'Unclassified_kw' in kwargs else "Unclassified" 
+        )
+        
+        # Initialise metadata structure
+        self._create_and_reorganise_metadata(signals)
+
+    # Nice printing of information 
+    def __repr__(self):
+
+        print("OBS! Mutliple stubs has not been tested yet!")
+
+        calibrated = False
+
+        cal_string = ''
+        
+        read_images = False
+
+        grid_string = ''
+
+        if hasattr(self, 'Images'):
+
+            read_images = True
+
+            #if hasattr(self.metadata, 'navigation_unit'):
+
+            #    calibrated = True
+
+        if read_images:
+
+            grid_string = str(self.Images.navigation_shape)[1:-1] + ' | '
+
+        if calibrated: 
+
+            scan_area = np.prod(self.Images.navigation_shape) * np.prod(self.Images.signal_shape)
+
+            scan_area *= np.square(self.metadata.navigation_scale)
+
+            num_density = self.number_of_particles / scan_area
+
+            area_density = np.sum(self.Particles.particle_geometry['Area [um²]']) / scan_area
+            
+            decimal_position_n = _utils.first_nonzero_decimal_position(num_density)
+
+            decimal_position_a = _utils.first_nonzero_decimal_position(area_density)
+
+            cal_string = f'\nScan unit: {self.metadata.navigation_unit}\nParticle number density: {round(num_density, decimal_position_n + 2)} 1/{self.metadata.navigation_unit}\u00b2\nParticle area density: {round(100 * area_density, decimal_position_a + 2)} %'
+        
+        #pa_string = f"<Particle analysis, title: {self.metadata.General.project_name}, dimensions: ({grid_string}{self.number_of_particles})>{cal_string}"
+        pa_string = ''
+        return pa_string
+
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%% PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    @property 
+    def is_classified(self):
+        return self._is_classified
+        
+    @property
+    def metadata(self):
+        """The metadata of the signal."""
+        return self._metadata
+
+    @property
+    def particle_classes(self):
+        """Particle classes"""
+        return self._particle_classes
+
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%% HIDDEN FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    def _create_and_reorganise_metadata(self, signals):
+        """Create metadata"""
+        from copy import deepcopy
+        
+        self._metadata = deepcopy(signals[0].metadata)
+        md = self.metadata
+
+        # Define Signals node
+        del md.Signal
+        md.add_node('Signals')
+
+        # Store additional data as a new branch
+        if hasattr(md, 'Additional_data'):
+            self._additional_data = md.Additional_data
+
+        # Iterate through the signals and let all have identical 
+        # metadata except from the Signal branch
+        for sig in signals:
+
+            # Get signal type
+            sig_type = sig.metadata.Signal.signal_type
+            del sig.metadata.Signal.signal_type
+            
+            md.set_item(
+                f'Signals.{sig_type}', deepcopy(sig.metadata.Signal)
+            )
+
+            # Set the signal metadata to reference the child class' 
+            # metadata
+            smd = sig.metadata
+            if hasattr(smd, 'Additional_data'):
+                del smd.Additional_data
+            smd.Acquisition_instrument = md.Acquisition_instrument
+            smd.General = md.General
+            #smd.Original_metadata = md.Original_metadata
+            smd.Sample = md.Sample
+
+    def _original_classes(
+        self,
+        classes : np.ndarray
+    ):
+        """Array of original classes"""
+        self._original_classes = classes
+    
+    def _set_particle_classification(
+        self, 
+        class_array : np.ndarray,
+        Unclassified_kw : str = 'Unclassified'
+    ) -> None:
+        """Set the as read particle classifications"""
+
+        self._is_classified = class_array != Unclassified_kw
+        self._particle_classes = class_array.copy()
+        
+        
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%% OPEN FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
+
+    def reset_particle_classifications(self):
+        """Reset all particle classes to the original classification"""
+        print(f"Setting the initial unique classes {np.unique(self._particle_classes)}",
+              f"-> {np.unique(self._original_classes)}")
+        self._particle_classes = self._original_classes
+        self._is_classified = self._particle_classes != 'Unclassified'
+        
+    def classify_particles(
+        self,
+        particles : np.ndarray | tuple,
+        labels : str | tuple | list | np.ndarray
+    ):
+        """Classify particles
+
+        Parameters
+        ----------
+        particle_array
+            Array of particles to classify
+        labels
+            Class label
+
+        Example
+        -------
+        >> s = pa.load(filename)
+        >> s.is_classified
+        array([False, False, True, ..., False, True, False])
+        >> s.particle_classes
+        array(['Unclassified', 'Unclassified', 'Classified', ...,
+       'Unclassified', 'Classified', 'Unclassified'], dtype=object)
+        >> s.classify(~s.is_classified, label = 'Classified')
+        >> s.is_classified
+        array([True, True, True, ..., True, True, True])
+        >> s.particle_classes
+        array(['Classified', 'Classified', 'Classified', ...,
+       'Cslassified', 'Classified', 'Classified'], dtype=object)
+
+        >> s.reset_particle_classifications()
+        >> s.classify(np.where(~s.is_classified), label = 'Classified')
+        >> s.is_classified
+        array([True, True, True, ..., True, True, True])
+        """
+
+        tot_particles = self.metadata.Sample.particles
+        print(tot_particles)
+        # Checking input array
+        if isinstance(particles, np.ndarray): 
+
+            if len(particles) != tot_particles:
+
+                if np.max(particles) >= tot_particles:
+
+                    raise ValueError(f"The provided array of shape {particles.shape}",
+                                "is not compatible with the total number of particles.")
+
+                else: 
+
+                    num_particles = len(particles) # "np.where()"
+                    
+                    particles = (particles)
+            
+            else: 
+                # Number of particles to classify
+                num_particles = np.sum(particles)
+
+        elif isinstance(particles, tuple): # np.where()
+
+            if isinstance(particles[0], np.ndarray) and len(particles[0]) > 0:
+
+                if particles[0].max() >= tot_particles:
+
+                    raise ValueError(f"The indices exceeds the total number of particles.")
+
+            else:
+
+                return print("No particles to classify.")
+                
+            num_particles = len(particles[0])
+
+        if num_particles == 0: 
+
+            return print('No particles to classify.')
+        
+        # Checking labels
+        if isinstance(labels, tuple | list | np.ndarray):
+
+            if len(labels) != tot_particles:
+
+                if len(labels) != num_particles:
+
+                    if len(labels) == 1:
+
+                        labels = np.asarray(labels * tot_particles)
+
+                    else:
+                        
+                        raise ValueError(f"The number of labels ({len(labels)}) do not match the",
+                                         f"the number of particles to classify ({num_particles}).")
+            
+            labels = np.asarray(labels)
+
+        else: labels = str(labels)
+        
+        class_array = np.asarray(['Unclassified'] * tot_particles)
+        class_array[particles] = labels
+        
+        # Set particle classes
+        self._set_particle_classification(
+            class_array = class_array, 
+        )
+        
 
 
-class ParticleAnalysis: 
+
+
+
+
+
+
+
+
+class _ParticleAnalysis: 
     """Create an object of the result from analysing 
     particles' chemistry and geometric properties
 
@@ -38,13 +352,13 @@ class ParticleAnalysis:
     """
     
     # Instance properties:
-    def __init__(self, arg):
+    def __init__(self, *args, **kwargs):
 
         # Make metadata structure:
-        self.metadata = _attribute_signals.metadata(arg)
+        self.metadata = _attribute_classes.metadata(arg)
         
         # Allocate Particles class
-        self.Particles = _signals_classes.Particles(arg)
+        self.Particles = _attribute_classes.Particles(arg)
 
         self.is_classified = self.Particles.classes != 'Unclassified'
         
@@ -102,46 +416,20 @@ class ParticleAnalysis:
     ############### FUNCTIONS ####################
     ##############################################
     
-    ##############################################
-    #%%%%%%%%%%%% Private functions %%%%%%%%%%%%%%
-        
-    def _identify_single_element_particles(self, return_array = False):
-        """Identify particles that only contain single elements"""
-        arr = np.sum(self.Particles.composition > 0, axis = 0) == 1
-        
-        print(f"Number of single element particles: {np.sum(arr)}")
-        
-        if return_array: return arr
-
-    def _update_particles_concentration(self, decimals = 2):
-        """Update the particles' element concentration."""
-        total = np.sum(self.Particles.composition, axis = 0)
-        
-        self.Particles.composition *= (100 / total) #percentage
-
-        self.Particles.composition = np.round(self.Particles.composition, decimals = decimals)
-
-        #if hasattr(self.metadata.Particles, 'matrix_composition'):
-
-        #    print('Updating the matrix composition')
-
-        #    matrix_total = np.sum(self.metadata.Particles.matrix_composition)
-
-        #    self.metadata.Particles.matrix_composition *= (100 / matrix_total) #percentage
-
-    def _check_array_length(self, array):
-        """Check the length of an input array and whether it is compatible with the stored number of particles in the object.
-
+    def _check_array_length(self, array, num):
+        """Check the length of an input array and whether it is compatible 
+        with the stored number of particles in the object.
+    
         Parameters
         ----------
         array
             Array whose length is to be checked
-
+    
         Returns
             True if len(array) is identical to the number of stored particles.
         """
         if len(array) != self.number_of_particles: 
-
+    
             print("The provided array does not match the number of particles")
             
             return False
@@ -198,11 +486,6 @@ class ParticleAnalysis:
         unique_labels = np.unique(self.Images.particle_map)
         
         self.Images.unique_particle_labels = np.delete(unique_labels, np.where(unique_labels == matrix_label))
-
-    def _update_particles_composition_shape(self):
-        """Update the object's attribute particles_composition_shape
-        """
-        self.particles_composition_shape = (len(self.Particles.elements), self.number_of_particles)
     
     def _stitch_cropped_particles(self,
                                   stitching_ncc_threshold = 0.25,
@@ -956,85 +1239,6 @@ class ParticleAnalysis:
         
         self.metadata.Acquisition_settings.acc_voltage = float(HT)
 
-    def set_matrix_composition(self, matrix_composition, unit):
-        """Set the matrix chemcial composition for reference. 
-
-        Parameters
-        ----------
-        matrix_composition
-            Chemical composition of the matrix to facilitate identification of false particles. 
-            A dictionary with elements as key arguments.
-
-        Example
-        -------
-        >>> import particle_analysis as pa
-        >>> s = pa.load(filename)
-        >>> s.print_identified_elements()
-        ['C','O','Al','Fe']
-        
-        >>> s.set_matric_composition(matrix_composition = [0.2, 0.5, 95, 4.3] # Equivalent to {'C' : 0.2, 'O' : 0.5, ... 'Fe' : 4.3}
-                                    )
-        >>> s.get_matrix_composition()
-        [0.2, 0.5, 95, 4.3]
-        """
-        #print("FIX ME! MATRIX COMPOSITION SHOULD BE SEPARATE FROM PARTICLES' COMPOSITION")
-        num_elements = len(self.get_identified_elements())
-        
-        if type(matrix_composition) == dict:
-            
-            arg_keys = list(matrix_composition.keys())
-
-            for key in arg_keys:
-
-                if key not in ELEMENTS: raise ValueError(f"Element {key} is not recognised.")
-
-        else: 
-            
-            raise TypeError(f"Matrix composition argument type ({type(matrix_composition)}) is not a valid type. Provide a dictionary.")
-        
-        m_comp = [matrix_composition[elem] for elem in matrix_composition.keys()]
-
-        m_sum = np.sum(m_comp)
-
-        if m_sum < 0.0 or m_sum > 100.0001: 
-            
-            raise ValueError(f"The provided composition is not normalised (sum({m_comp}) = {m_sum})") 
-
-        elif m_sum != 100.0: 
-
-            warnings.warn(f'Normalising the provided matrix composition from a total of {m_sum} % to 100%.\n')
-
-            m_comp = [100.0 * matrix_composition[elem] / m_sum for elem in matrix_composition.keys()]
-        
-        #m_comp = np.zeros(num_elements)
-        for elem in matrix_composition.keys():
-        
-            if elem not in self.get_identified_elements(): warnings.warn(f"\nElement {elem} is not part of the particles' chemistry.")
-
-            #m_comp[self.get_identified_elements().index(elem)] = matrix_composition[elem]
-        
-        if m_sum == 1.0: m_comp *= 100
-
-        # Change unit if necessary
-        current_unit = self.metadata.chemical_unit
-        
-        if current_unit in AVAILABLE_UNITS[0]: current_unit = 0 # at.%
-        else: current_unit = 1 # wt.%
-        if unit in AVAILABLE_UNITS[0]: matrix_unit = 0 # at.%
-        else: matrix_unit = 1 # wt.%
-
-        if current_unit != matrix_unit:
-
-            if current_unit == 0 and matrix_unit == 1: m_comp = np.round(weight_to_atomic(m_comp, self.Particles.elements), decimals = 2)
-
-            else: m_comp = np.round(atomic_to_weight(m_comp, self.Particles.elements), decimals = 2)
-        
-        self.metadata.Particles.matrix_composition = m_comp
-        
-        self.metadata.Particles.matrix_elements = list(matrix_composition.keys())
-
-        print(f"Storing matrix composition in the class' metadata.Particles attribute matrix_composition.")
-
     def set_navigation_scale(self, scale, unit):
         """Set the image scale
 
@@ -1097,38 +1301,6 @@ class ParticleAnalysis:
                 self.Images.particle_map.axes_manager[-2].scale = scale
     
                 self.Images.particle_map.axes_manager[-2].units = unit
-    
-    def change_chemical_unit(self):
-        """Change the chemical unit of the class"""
-        
-        current_unit = self.metadata.chemical_unit
-
-        # Change from wt.% to at.%
-        if current_unit in AVAILABLE_UNITS[1]:
-
-            self.Particles.composition = np.round(weight_to_atomic(self.Particles.composition, self.Particles.elements), decimals = 2)
-
-            if hasattr(self.metadata.Particles, 'matrix_composition'): 
-                
-                self.metadata.Particles.matrix_composition = np.round(weight_to_atomic(self.metadata.Particles.matrix_composition, self.metadata.Particles.matrix_elements), decimals = 2)
-
-            self.Particles.chemical_unit = '[at.%]'
-
-            self.metadata.chemical_unit = '[at.%]'
-
-        elif current_unit in AVAILABLE_UNITS[0]:
-
-            self.Particles.composition = np.round(atomic_to_weight(self.Particles.composition, self.Particles.elements), decimals = 2)
-
-            if hasattr(self.metadata.Particles, 'matrix_composition'): 
-                
-                self.metadata.Particles.matrix_composition = np.round(atomic_to_weight(self.metadata.Particles.matrix_composition, self.metadata.Particles.matrix_elements), decimals = 2)
-
-            self.Particles.chemical_unit = '[wt.%]'
-
-            self.metadata.chemical_unit = '[wt.%]'
-        
-        else: print(f"{current_unit} is not recognised as a chemical unit.")
 
     # Classified particles
     def classified_particles(self):
@@ -2930,436 +3102,6 @@ class ParticleAnalysis:
                 filename = f"{cl}_{self.metadata.chemical_unit}.txt"
             )
 
-    
-
-            
-
-
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% UTILITIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        
-class utils:
-    """ Particle analysis utilities"""
-
-    def __init__(self, arg):
-
-        self.csv_keys = pd.read_csv(arg).keys()
-
-    def print_csv_metadata(csv_file):
-        """Print the stored metadata in the particle analysis *.csv file
-
-        Parameters
-        ----------
-        csv_file
-            Either the csv filename used to load the data, or the pandas DataFrame object
-        """
-        
-        if type(csv_file) == str: csv_file = pd.read_csv(str(csv_file))
-
-        csv_keys = list(csv_file.keys())
-
-        project_name = csv_keys[1]
-
-        first_col, second_col = csv_file['Project name'], csv_file[project_name]
-
-        # second_col[~first_col] is to avoid a vertical shift
-        first_col, second_col = first_col[~first_col.isnull()], second_col[~first_col.isnull()] 
-
-        # Replace nan == empty cell with empty string
-        second_col[second_col.isnull()] = ''
-        
-        for first, second in zip(first_col, second_col): print(f"{first:35}{second:<20}")
-
-
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #%%%%%%%%%%%%%%%%%%%%%%% PRINTING PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    def print_particles_property(data, header, label = '', return_table = False):
-        """Print selected particle's property like chemical composition or geometry
-        
-        Parameters
-        ----------
-        data
-            Data to be printed. The data is expected to fit the shape (len(header), len(label))
-        label
-            List of labels : will be printed at the left of each row 
-        header
-            List of headers : will be printed at the top of each column
-
-        Returns
-        -------
-
-        Example:
-        >>>print_particles_property(data = (n,m) array of data, like (num elements, num particles)
-                                 label = (n,) list of labels, like class names
-                                 header = (m,) list of headers, like list of elements
-        >>>
-        """ 
-
-        data_shape = data.shape
-
-        if len(data_shape) <= 2:
-            
-            if type(label) == str: 
-                
-                if label == '': label = np.arange(0, data_shape[1])
-        
-            if data_shape[0] == len(header) and data_shape[1] == len(label):
-            
-                table = _utils._get_table(np.round(data, decimals = 2), label)
-
-                if return_table: return table #tabulate(table, header, tablefmt="pretty") 
-                
-                else: print(tabulate(table, header, tablefmt="pretty"))
-
-            else: print(f"The data shape ({data_shape}) doesn't fit the header ({len(header)}) and/or label ({len(label)}) shape(s)")
-        
-        else: print(f"Data of shape {data_shape} doesn't fit the table.")
-
-    def save_particles_property(data, header, label = '', path = '', filename = 'tabulates.txt'):
-        """Save the tabulated data in folder tabulates
-        
-        Parameters
-        ----------
-        data, label, header: see print_particles_property
-
-        path
-            String path to store the tabulated data. 
-
-        filename
-            Name of file being saved
-
-        Note! The data will be stored in a filename called tabulates.txt.
-        """
-
-        folder = path
-
-        save_results = False
-
-        if folder[-1] != '\\' or folder[-1] != '/': folder += '\\'
-
-        if os.path.exists(folder): save_results = True
-
-        else: 
-            
-            ans = input(f"Couldn't find path {path}.\nCreate path? (y/[n])")
-
-            if ans.upper() == 'Y' or ans == '':
-
-                print(f"Creating path {path}")
-                
-                os.mkdir(path)
-
-                save_results = True
-
-        if save_results:
-
-            if header == '': header = np.arange(0, np.shape(data)[1])
-
-            table = _utils._get_table(data, label)
-
-            filename = f"{os.path.splitext(filename)[0]}.txt"
-            
-            with open(folder + filename, 'w') as f:  f.write(tabulate(table, header, tablefmt="pretty"))
-
-
-    
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% IMAGE MANIPULATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-    def stitch_images(images, 
-                      navigation_shape, 
-                      horisontal_direction = 'r2l', 
-                      vertical_direction = 't2b'):
-        """Stitch an array of images into a 2D image. 
-
-        Parameters
-        ----------
-        images
-            Array with images to stitch. Expected shape: 4D (2 navigation, 2 image) dimensions
-        navigation_shape 
-            list or tuple of the concatenated image shape. 
-            Note that the shape should reflect the numpy convention (i.e. 20 images -> 4x5 => shape = (5,4))
-        vertical_direction
-            Vertical direction at which the images are to be stitched.
-            Allowed arguments: l2r and r2l (default: r2l: right to left)
-        horisonal_direction
-            Horisontal direction at which the images are to be stitched 
-            Allowed arguments: t2b and b2t (default: t2b: top to bottom)
-
-        Returns
-        -------
-        stitched_image 
-            Concatenated images as a numpy array
-        """
-        if not _errors._check_for_numpy_ndarray(images): 
-            
-            raise TypeError(f'Argument data_array of type {type(images)} is not a numpy ndarray')
-        
-        if not len(navigation_shape) == 2: 
-
-            if len(navigation_shape) == 1: navigation_shape = (1, navigation_shape[0])
-            
-            else: raise ValueError(f"Provided image shape {navigation_shape} is invalid. Provide a two dimensional shape.")
-
-        if images.shape[:2] == navigation_shape:
-
-            images = _image_utils._gridify_4D_array_to_3D(images)
-
-        return _image_utils._stitch_images(images, 
-                                      navigation_shape, 
-                                      horisontal_direction = horisontal_direction, 
-                                      vertical_direction = vertical_direction)
-
-    def stitch_rgb_phase_map(phase_map, nav_shape):
-        """Stitch a 4D or 5D array with 3 rgb channels into a single image of shape 3: (x,y,channels).
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        
-        Example
-        -------
-        """
-        if not _errors._check_for_numpy_ndarray(phase_map): raise TypeError('Provided phase map must be a numpy ndarray')
-
-        if len(nav_shape) != 2: raise ValueError(f"Provided navigation shape {nav_shape} is not valid.")
-        
-        phase_map_s = phase_map.copy()
-
-        # 20*20 != 20
-        if np.prod(nav_shape) == np.prod(phase_map.shape[:2]) and len(phase_map) > 4: 
-
-            phase_map_s = _image_utils._image_utils._gridify_ND_array_to_nD(phase_map_s)
-
-        return _image_utils._stitch_images(phase_map_s, shape = nav_shape)
-        
-    
-    def greyscale_to_rgba(grey_image, dtype_out = np.float16):
-        """Return a grey-scale array as a rgb equivalent
-        
-        Parameters
-        ----------
-        grey_image
-            2D grey scale image array 
-    
-        Returns
-        -------
-            2D image array with RGBA channels (RGB is normalised to be in the range 0,1)
-        """
-        fac = np.max(grey_image)
-        
-        if not _errors._check_for_numpy_ndarray(grey_image): raise TypeError(f"Input image is not a grey scale.")
-        
-        img = np.expand_dims(grey_image, axis = -1).astype(dtype_out)
-        
-        return np.concatenate((img / fac, img / fac, img / fac,
-                               np.full_like(img, 1)), # alpha channel
-                               axis = -1)
-
-    def greyscale_to_rgb(grey_image, 
-                         in_range=(0, 255),
-                         dtype_out = np.float16):
-        """Return a grey-scale array as a normalised rgb equivalent (intensity range: 0,1)
-        
-        Parameters
-        ----------
-        grey_image
-            2D grey scale image array 
-        in_range
-            tuple of in range intensity values that is givne to the rescale_intensity function
-        dtype_out
-            Datatype to return            
-    
-        Returns
-        -------
-            2D image array with RGBA channels (RGB is normalised to be in the range 0,1)
-        """
-                
-        if not _errors._check_for_numpy_ndarray(grey_image): raise TypeError(f"Input image is not a grey scale.")
-        
-        from skimage import color
-        from skimage.exposure import rescale_intensity
-
-        grey_im = color.gray2rgb(grey_image) # Intensity values unchanged
-        
-        return (rescale_intensity(1.0 * grey_im, in_range = in_range)).astype(np.float32)
-
-    def gridify_3D_array_to_4D(arr, nav_shape):
-        """Gridify the 3D array to 4D. Nav_shape defines the number of images in the different directions.
-
-        Parameters
-        ----------
-        arr
-            numpy.ndarray of shape (3,)
-        nav_shape
-            Navigation shape to shape the array into
-
-        Example
-        ------
-        >>> import particle_analysis as pa
-        >>> import numpy as np
-        >>> img = np.asarray([[[0]*4]*4]*4)
-        >>> img.shape
-        (4,4,4)
-        >>> img = pa.gridify_3D_array_to_4D(arr, nav_shape = (2,2))
-        >>> img.shape
-        (2,2,4,4)
-        """
-        if len(arr.shape) != 3: raise TypeError(f"Array shape {arr.shape} is not expected.")
-
-        if len(nav_shape) != 2: raise TypeError(f"Navigation shape is not valid. Provide a 2-integer list")
-
-        return _image_utils._gridify_3D_array_to_4D(arr, nav_shape + arr.shape[-2:])
-        
-    def plot_rgb_map_with_colorbar(array, 
-                                   colours, 
-                                   background_colour = 'whitesmoke',
-                                   return_fig = False):
-        from matplotlib import colors
-        import matplotlib.pyplot as plt
-        
-        auto_colouring  = False
-
-        colour_type = type(colours)
-
-        num_colors = len(colours)
-        
-        if colours is not None: 
-
-            unique_classes = list(colours.keys())
-
-            if colour_type == dict: colours = [colours[cl] for cl in unique_classes]
-
-        else: auto_colouring = True
-
-        # Create a unique color map
-        if auto_colouring: 
-
-            if len(colours) < 11: 
-                
-                print('Colouring according to tableau colors')
-                
-                colours = [col for col in list(colors.TABLEAU_COLORS.keys())[:len(unique_classes)]]
-            
-            else: 
-                
-                print('Generating random colours')
-                # Alternatively, use: colors.CSS4_COLORS
-                colours = [_utils._generate_random_rgb_color() for i in range(len(unique_classes))]
-
-        colours.insert(0, colors.to_rgb(background_colour))
-
-        unique_classes.insert(0, 'Matrix')
-        
-        phase_vals = np.arange(num_colors + 1)
-        
-        cmap = colors.ListedColormap(colours)
-        
-        norm = colors.BoundaryNorm(np.arange(-0.5, phase_vals.max() + 1.5, 1), cmap.N)
-
-        # Plotting
-        fig, ax = plt.subplots()
-        cax = ax.imshow(array, cmap = cmap, norm = norm)
-        # Add a colorbar with a label
-        cbar = fig.colorbar(cax, ticks = phase_vals)
-        
-        if colour_type == dict: cbar.ax.set_yticklabels(unique_classes) 
-            
-        plt.axis('off')
-        plt.show()
-
-        if return_fig: return fig
-    
-    
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PARTICLE CHEMISTRY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-    def plot_data_distribution(data_arr,
-                               unit = '',
-                               x_tick = '',
-                               colors = [np.asarray([21,106,163]) / 255, # violin
-                                         np.asarray([175,204,184])#191,187,152]) 
-                                                         / 255, # boxplot
-                                         np.asarray([206,156,168]) / 255], # scatter
-                               return_fig = False):
-        """Plot a box + violin + scatter plot of data_arr
-
-        Parameters
-        ----------
-        data_arr
-            np.ndarray of shape (N,)
-        """
-        import matplotlib.pyplot as plt
-
-        # --- Temporary change using rc_context() ---
-        with plt.rc_context({'lines.linewidth': 3, 'font.size' : 16}):
-        
-            fig, axs = plt.subplots(figsize=(10,10))
-    
-            boxprops = dict(linestyle='-', linewidth=2, color='k')
-            
-            medianprops = dict(linestyle='-', linewidth=2, color='k')
-            
-            bplot = axs.boxplot(data_arr, patch_artist=True, boxprops=boxprops, medianprops=medianprops)
-            
-            vp1 = axs.violinplot(data_arr, showmeans=False, showmedians=False, side = 'high', showextrema=False)
-
-            for pc in vp1['bodies']:
-                pc.set_facecolor(colors[0])
-                pc.set_edgecolor('black')
-            
-            axs.set_ylabel(unit)
-            
-            for patch, color in zip(bplot['boxes'], [colors[1]]): 
-                patch.set_alpha(0.8)
-                patch.set_facecolor(color)
-            
-            x_arr = np.random.randint(low = 95, high = 105, size = len(data_arr)) / 100
-            
-            scatter = axs.scatter(x_arr, data_arr, color=colors[2], marker='o', zorder=5, alpha=.35)
-            
-            # Legends
-            axs.legend([bplot["boxes"][0], vp1['bodies'][0], scatter], 
-                       ['Box plot', 'Violin plot', 'Data pts.'], 
-                       loc='upper right')
-
-            plt.xticks([1], [x_tick])
-    
-            plt.show()
-
-        if return_fig: return fig
-
-    def get_label_colourmap(list_of_colours : list | None = None):
-        """Create a colourmap for labels.
-
-        Parameters
-        ----------
-        list_of_colours
-            List of pyplot colour names
-        num_colours
-            Number of colours in the colourmap
-
-        returns
-        -------
-        colour map
-            A matplotlib.color ListedColormap
-        """
-        return _colouring.get_discrete_colour_map(list_of_colours)
-
-    def get_navigator_colours(image):
-        """Create a navigator rgb map
-        """
-        return _colouring.get_rgb_navigator(image)
-
-    def get_greek_letters(letter : str):
-        """Return the ¨code representing greek letters for nice printing/name setting"""
         
 
 
