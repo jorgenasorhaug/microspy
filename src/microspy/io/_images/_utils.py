@@ -16,3 +16,34 @@
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
+
+def _image_directory_searcher(
+    vendor : str
+) -> str:
+    """Search for image directory according to vendor by 
+    walking through the sub-directories
+
+    Parameters
+    ----------
+    vendor
+        String stating the vendor
+
+    Returns
+    -------
+    directory_searcher
+        An image directory searcher
+    """
+    
+    vendor = str(vendor)
+    
+    """
+    vendors ...
+    readers ...
+    """
+
+    if vendor.lower() == "jeol":
+        from .plugins.JEOL._utils import (
+            search_for_image_directory as reader
+        )
+
+    return reader

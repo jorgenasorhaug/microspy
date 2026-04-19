@@ -16,33 +16,31 @@
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
+# tqdm(..., desc=" outer", position=0):
 
 import numpy as np
 import pandas as pd
-from exspy.material import elements as ELEMENTS
-from exspy.material import weight_to_atomic, atomic_to_weight
-from hyperspy.signals import Signal2D, Signal1D
 from tabulate import tabulate
 import warnings, os
+from pathlib import Path
 
-#from src.microspy.signals import _images, _attribute_classes 
-#from src.microspy.signals.util import _image_utils
-#from src.microspy.io import _io, _read_metadata
-#from src.microspy._utils import _utils
-
-#from src.microspy.signals._microspy_signals import MicroSpySignal1D
-
-# tqdm(..., desc=" outer", position=0):
+from src.microspy.signals._microspy_signals import (
+    MicroSpySignal2D, 
+    Images
+)
 
 from hyperspy.misc import utils
 
-AVAILABLE_UNITS = [
+AVAILABLE_CHEM_UNITS = [
     ['At %', 'At%', '[At %]','[At%]','At.%','[At.%]','at%', '[at%]','at.%','[at.%]',],
     ['Mass %', 'Mass%','[Mass %]','[Mass%]','mass%','[mass%]','wt.%','Wt.%','[wt.%]','[Wt.%]','[wt%]','[Wt%]']
 ]
 
 
-from src.microspy.signals._microspy_signals import MicroSpySignal1D_Chemistry, MicroSpySignal1D_Geometry
+from ._microspy_signals import (
+    MicroSpySignal1D_Chemistry, 
+    MicroSpySignal1D_Geometry
+)
 
 class ParticleAnalysis:
     """Particle analysis class
@@ -75,7 +73,7 @@ class ParticleAnalysis:
 
         # Set attributes
         for signal in signals:
-            # Chemistry and geometry trackers:
+            # Set chemistry and geometry trackers:
             setattr(self, signal.metadata.Signal.signal_type, signal)
 
         # Set particle classification
@@ -217,11 +215,12 @@ class ParticleAnalysis:
 
     def reset_particle_classifications(self):
         """Reset all particle classes to the original classification"""
-        print(f"Setting the initial unique classes {np.unique(self._particle_classes)}",
+        print(f"Setting the initial unique classes {np.unique(self._particle_classes)}"
               f"-> {np.unique(self._original_classes)}")
         self._particle_classes = self._original_classes
         self._is_classified = self._particle_classes != 'Unclassified'
-        
+
+    @particle_classes.setter
     def classify_particles(
         self,
         particles : np.ndarray | tuple,
@@ -310,7 +309,7 @@ class ParticleAnalysis:
 
                     else:
                         
-                        raise ValueError(f"The number of labels ({len(labels)}) do not match the",
+                        raise ValueError(f"The number of labels ({len(labels)}) do not match the"
                                          f"the number of particles to classify ({num_particles}).")
             
             labels = np.asarray(labels)
@@ -324,16 +323,122 @@ class ParticleAnalysis:
         self._set_particle_classification(
             class_array = class_array, 
         )
+
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%% IMAGE ACQUISITION %%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    def load_images(
+        self, 
+        directory = None,
+        get_particle_images : bool = True,
+        centre_particle_images : bool = True,
+        set_dtype : bool = None
+    ):
+        """Load the acquired images and the corresponding 
+        particle images from particle analysis.
+
+        Parameters
+        ----------
+        directory
+            Directory to where the images are stored.
+            If None, the function will use the stored
+            directory in the original metadata and search
+            for the images.
+        """ 
+
+        from ._microspy_signals import Images_signal_type
         
+        vendor = self.metadata.Acquisition_instrument.vendor
+
+        # Look for a potential directory
+        if directory == None:
+
+            from src.microspy.io._images._utils import (
+                _image_directory_searcher as directory_searcher
+            )
+
+            directory = self.metadata.General.original_filename 
+            
+            directory = os.path.split(directory)[0]
+            
+            print("Searching for particle images in "
+                f"{directory} sub-directories.")
+
+            directory_searcher = directory_searcher(vendor) 
+            
+            # A warning will be raised if multiple directories
+            # are found:
+            directory = Path(
+                directory_searcher(directory)
+            ).parent
+
+        directory = str(directory)
+        
+        """
+        readers ...
+        subdir_keyword
+        """
+
+        # Load subdirectory keyword unique for vendor (if any) 
+        if vendor.lower() == 'jeol':
+            from src.microspy.io._images.plugins.JEOL._api import (
+                subdir_keyword
+            )
+            from src.microspy.io._images import _io
+        else:
+            raise AttributeError(
+                f"Vendor {vendor} is not recognised"
+                "or not supported yet.")
+        
+        images = _io.load_images(
+            path = directory,
+            vendor = vendor,
+            get_particle_images = get_particle_images,
+            centre_particle_images = centre_particle_images,
+            set_dtype = set_dtype
+        )
+
+        num_experiments = len(images)
+
+        # Multiple experiments:
+        for exp in range(num_experiments):
+
+            # Set signals and image types
+            IMAGES = []
+            for im, imtype in zip(
+                images[exp],
+                Images_signal_type.keys()):
+                
+                im = MicroSpySignal2D(im)
+    
+                im.metadata.Signal.signal_type = imtype
+                
+                im.metadata.General.title = Images_signal_type.get(imtype)
+    
+                IMAGES.append(im)
+            
+            if num_experiments == 1:
+
+                # If single experiment:
+                self.Images = Images(IMAGES)
+
+            else:
+
+                # If multiple experiments:
+                if exp < 10: _exp = f"0{exp}"
+
+                else: _exp = str(exp)
+                    
+                setattr(self, f"Images{_exp}", Images(IMAGES))
 
 
 
 
 
 
-
-
-
+#####################################################
+############## OLD SOLUTIONS ########################
 
 class _ParticleAnalysis: 
     """Create an object of the result from analysing 

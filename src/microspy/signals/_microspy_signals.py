@@ -20,13 +20,18 @@
 import numpy as np
 import warnings
 
-from hyperspy.signals import Signal1D
+from hyperspy.signals import Signal1D, Signal2D
+from hyperspy.misc import utils
 from hyperspy.utils.markers import Texts
-from src.microspy._utils import exceptions 
+from src.microspy._misc import exceptions 
 
-from exspy.material import elements, weight_to_atomic, atomic_to_weight
+from src.microspy._misc.material import (
+    elements, 
+    weight_to_atomic, 
+    atomic_to_weight
+)
 
-ELEMENTS = list(elements.as_dictionary().keys())[1:]
+ELEMENTS = list(elements.keys())[1:]
 
 ALLOWED_CHEMICAL_UNITS = [
     ['Atomic %', 'atomic %', 'Atomic%', 'atomic%', '[Atomic %]', '[atomic %]', '[Atomic%]', '[atomic%]',
@@ -36,9 +41,9 @@ ALLOWED_CHEMICAL_UNITS = [
     '[Wt %]', '[wt %]', '[Wt%]', '[wt%]', '[Wt. %]', '[wt. %]', '[Wt.%]', '[wt.%]']
 ]
 
-##################################################
-################# PARENT CLASS ###################
-##################################################
+####################################################
+################# PARENT CLASSES ###################
+####################################################
 
 class MicroSpySignal1D(Signal1D):
     """Class for tracking particles' chemistry using microspy, 
@@ -71,7 +76,7 @@ class MicroSpySignal1D(Signal1D):
     @property
     def prop(self) -> list:
         return self.metadata.Signal.props
-    
+
     def set_unit(self, units : list | str) -> None:
         """Set the signal unit"""
         self.metadata.Signal.units = units
@@ -132,21 +137,8 @@ class MicroSpySignal1D(Signal1D):
             **{'shift_along_x' : shift_along_x,
               'color' : color}
         ) 
-        
-        #data = self.data.copy()
-        #data = np.concatenate([data, np.ones((data.shape[0],1)) * 100], axis = -1)
-        #data[:,-1] = 100
-        #__tmp__ = Signal1D(data)
-        #__tmp__.plot()
-        #__tmp__.add_marker(markers)
-        
-        self.plot(vmax = 100) # vmax doesn't work...
+        self.plot(autoscale = 'x') 
         self.add_marker(markers)
-
-
-
-
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #%%%%%%%%%%%%%%%%%%%%% SUB-CLASSES %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -414,30 +406,141 @@ class MicroSpySignal1D_Geometry(MicroSpySignal1D):
         self.metadata.Signal.signal_type = 'Geometry'
         self.metadata.Signal.props = kwargs.get('props')
 
-    @property
-    def elements(self) -> list[str, ...]:
-        """Return the stored elements"""
-        return self.metadata.Signal.prop
 
-    @property
-    def matrix_elements(self) -> list[str, ...]:
-        if not hasattr(self.metadata.Signal, "matrix_elements"):
-            raise AttributeError("The matrix composition has not been set.")
-        return self.metadata.Signal.matrix_elements
 
-    @property
-    def matrix_composition(self) -> list[float, ...]:
-        if not hasattr(self.metadata.Signal, "matrix_composition"):
-            raise AttributeError("The matrix composition has not been set.")
-        return self.metadata.Signal.matrix_composition
+
+
         
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%% IMAGE CLASSES %%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+Images_signal_type = {
+    "CompositeSig" : "Overview_image", #Overview/stitched im.
+    "ParentSig" : "Individual_acquisitions", # Individual images
+    "ChildSig" : "Cropped_ROIs"
+}      
+
+class MicroSpySignal2D(Signal2D):
+    """Class for tracking particle images using microspy, 
+    extending HyperSpy's Signal2D class.
+
+    Not meant to be used directly.
+
+    Example
+    -------
+    >>> s = np.arange(8).reshape(2,2,2)
+    >>> s = MicroSpySignal2D(s)
+    >>> s
+    <MicroSpySignal2D, title: , dimensions: (2|2, 2)>
+    """ 
+    def __init__(self, *args, **kwargs) -> None:
+        # Call the super constructor
+        super().__init__(*args, **kwargs)
+
+    @property
+    def is_gridified(self):
+        if len(self.data.shape) > 3:
+            return True
+        else:
+            return False
 
 class Images:
-    def __init__(self) -> None:
-        print('Images')
+    """A class to keep track of and manipulate acquired
+    SEM images. The images are hyperspy 2D signals.
+    """
+    def __init__(self, images : list | np.ndarray) -> None:
+
+        from src.microspy.io._images import _io
+
+        # Images to MicroSpySignal2D
+        images = _io._arrays2signals(images)
+
+        sig_types = []
+        
+        for im in images:
+
+            sig_types.append(im.metadata.Signal.signal_type)
+            
+            setattr(self, sig_types[-1], im)
+
+        self.phase_maps = dict()
+
+        self._create_metadata()
+
+        for sig_type in sig_types:
+
+            # Set a brief description of the signal type
+            self.metadata.set_item(
+                f"Signals.{sig_type}", 
+                Images_signal_type.get(sig_type)
+            )
+
+        self.metadata.set_item("General.title", "")
 
     def __repr__(self):
-        return('Fix me')
+        # General overview:
+        dim = self.num_signals
+        title = self.metadata.General.title
+        print_string = f"<Images class, title: {title}," 
+        print_string += f"dimensions: ({dim}|)>:\n"
+
+        # Signal soverview:
+        sig_types = self.metadata.Signals.as_dictionary()
+        for counter, key in enumerate(sig_types.keys()):
+            _sig = vars(self).get(key)
+            title = _sig.metadata.General.title
+            _dim = _sig.data.shape
+            dim = f"({_dim[:-2]}|{_dim[-2:]})".replace(
+                "(","").replace(")","")
+            sig_string = f"<title: {title}, dimensions: ({dim})" 
+            if counter < len(sig_types) - 1:
+                print_string += f"├── {key}: {sig_string}\n"
+            else:
+                print_string += f"└── {key}: {sig_string}\n"
+        return print_string
+        
+    @property
+    def is_gridified(self):
+        """Check if the Parent signal is gridified
+        into a 4D grid or not. The function returns
+        True if the array shape is (Y,X,ky,kx) (numpy
+        convention) or higher.
+
+        Note:
+            If the signal is a series of images taken
+            along a row/column, the signal must be grid-
+            ified into a 4D signal to be correctly inter-
+            preted. 
+            Example: A column of images with shape (c,X,Y) 
+            is correctly shaped, hence interpreted, if the 
+            data is gridified into shape (c,1,X,Y).
+        """
+        if hasattr(self, "ParentSig"):
+            return self.ParentSig.is_gridified()
+        else: 
+            warnings.warn("The class has no parent signal.")
+            return False
+
+    @property
+    def metadata(self):
+        """The metadata of the signal."""
+        return self._metadata
+
+    @property
+    def num_signals(self):
+        """Get the total number of image signals"""
+        num = 0
+        for attr, value in vars(self).items():
+            if isinstance(value, MicroSpySignal2D):
+                num += 1
+        return num
     
+    def _create_metadata(self):
+        self._metadata = utils.DictionaryTreeBrowser()
+        md = self.metadata
+        md.add_node("General")
+        md.General.add_node("title")
+        md.add_node("Signals")
+        self._original_metadata = utils.DictionaryTreeBrowser()

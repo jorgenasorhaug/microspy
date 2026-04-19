@@ -1,5 +1,5 @@
 import numpy as np
-from src import read_metadata, _io
+from src.microspy.io import _read_metadata, _io
 
 class General:
     """metadata sub-class storing general information s.a. acquisition date and 
