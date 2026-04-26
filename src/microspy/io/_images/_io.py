@@ -26,7 +26,8 @@ from src.microspy.io._utils import (
     _identify_subdirectories_of_interest
 )
 from src.microspy.signals._microspy_signals import (
-        MicroSpySignal2D
+        MicroSpySignal2D,
+        MicroSpySignal2D_Parent
     )
 
 from src.microspy._misc import exceptions
@@ -217,7 +218,7 @@ def _arrays2signals(#_1dArray2list(
 
 def _assign_image_subclass(
     array : np.ndarray
-) -> MicroSpySignal2D:
+) -> MicroSpySignal2D | MicroSpySignal2D_Parent:
     """Assign image subclass to a list of 
     ndarrays
 
@@ -232,8 +233,10 @@ def _assign_image_subclass(
         list of image subclasses
     """
 
-    # Return array if it's already defined
-    if isinstance(array, MicroSpySignal2D):
+    # Return signal if it's already been set
+    if isinstance(array, MicroSpySignal2D | 
+                  MicroSpySignal2D_Parent
+                 ):
 
         return array
 
@@ -243,17 +246,15 @@ def _assign_image_subclass(
 
     if dim == 2:
         
-        arr.metadata.Signals.signal_type = f"1D_Image_shape{np.shape(array)}".replace(", ","x")
+        arr.metadata.Signal.signal_type = f"2D_Image_shape{np.shape(array)}".replace(
+            ", ","x"
+        ).replace('(','').replace(')','')
 
-    elif dim == 3:
+    elif dim > 2:
 
-        arr.metadata.Signals.signal_type = f"2D_Image_shape{np.shape(array)}".replace(", ","x")
-
-    else:
-
-        raise exceptions.ShapeError(f"Array dimension "
-                                   "({dim}) is not "
-                                    "supported")
+        arr.metadata.Signal.signal_type = f"ND_Image_shape{np.shape(array)}".replace(
+            ", ","x"
+        ).replace('(','').replace(')','')
         
     return arr
 

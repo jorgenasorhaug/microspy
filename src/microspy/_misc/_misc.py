@@ -103,6 +103,52 @@ def generate_structure_md(root_dir, output_file="PROJECT_STRUCTURE.md"):
     print(f"Structure successfully saved to {output_file}")
     print(content)
 
+def _vendor2ImAquisitionOrder(vendor : str):
+    """Return the likely image acquisition order according to 
+    vendor.
+
+    Parameters
+    ----------
+    vendor 
+        Vendor name
+
+    Returns
+    -------
+    image_orders 
+        acquisition directions
+
+        horisontal directions : ("r2l", "l2r")
+        vertical directions : ("t2b", "b2t")
+    """
+
+    if vendor.lower() == "jeol":
+        return "r2l","t2b"
+    else:
+        return None, None
+
+def _vendor2ImFlipAxes(vendor : str):
+    """Return the likely image acquisition order according to 
+    vendor.
+
+    Parameters
+    ----------
+    vendor 
+        Vendor name
+
+    Returns
+    -------
+    image_orders 
+        acquisition directions
+
+        horisontal directions : ("r2l", "l2r")
+        vertical directions : ("t2b", "b2t")
+    """
+
+    if vendor.lower() == "jeol":
+        return (1,)
+    else:
+        return None, None
+
 def print_csv_metadata(csv_file):
     """Print the stored metadata in the particle analysis *.csv file
 

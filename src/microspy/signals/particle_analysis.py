@@ -26,7 +26,11 @@ from pathlib import Path
 
 from src.microspy.signals._microspy_signals import (
     MicroSpySignal2D, 
-    Images
+    MicroSpySignal2D_Parent,
+    Images,
+    MicroSpySignal1D_Chemistry, 
+    MicroSpySignal1D_Geometry,
+    Images_signal_type
 )
 
 from hyperspy.misc import utils
@@ -37,10 +41,7 @@ AVAILABLE_CHEM_UNITS = [
 ]
 
 
-from ._microspy_signals import (
-    MicroSpySignal1D_Chemistry, 
-    MicroSpySignal1D_Geometry
-)
+
 
 class ParticleAnalysis:
     """Particle analysis class
@@ -68,7 +69,9 @@ class ParticleAnalysis:
     def __init__(self, signals, **kwargs) -> None:
 
         # Check if single signal is provided or not
-        if isinstance(signals, (MicroSpySignal1D_Geometry, MicroSpySignal1D_Chemistry)): 
+        if isinstance(signals, 
+                      (MicroSpySignal1D_Geometry, 
+                       MicroSpySignal1D_Chemistry)): 
             signals = [signals]
 
         # Set attributes
@@ -213,7 +216,7 @@ class ParticleAnalysis:
     #%%%%%%%%%%%%%%%%%% OPEN FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
 
-    def reset_particle_classifications(self):
+    def reset_particle_classes(self):
         """Reset all particle classes to the original classification"""
         print(f"Setting the initial unique classes {np.unique(self._particle_classes)}"
               f"-> {np.unique(self._original_classes)}")
@@ -284,7 +287,8 @@ class ParticleAnalysis:
 
                 if particles[0].max() >= tot_particles:
 
-                    raise ValueError(f"The indices exceeds the total number of particles.")
+                    raise ValueError("The indices exceeds the total "
+                                     "number of particles.")
 
             else:
 
@@ -309,8 +313,10 @@ class ParticleAnalysis:
 
                     else:
                         
-                        raise ValueError(f"The number of labels ({len(labels)}) do not match the"
-                                         f"the number of particles to classify ({num_particles}).")
+                        raise ValueError(f"The number of labels ({len(labels)}) "
+                                         "do not match the the number of "
+                                         "particles to classify "
+                                        f"({num_particles}).")
             
             labels = np.asarray(labels)
 
@@ -346,8 +352,6 @@ class ParticleAnalysis:
             directory in the original metadata and search
             for the images.
         """ 
-
-        from ._microspy_signals import Images_signal_type
         
         vendor = self.metadata.Acquisition_instrument.vendor
 
@@ -404,17 +408,25 @@ class ParticleAnalysis:
         # Multiple experiments:
         for exp in range(num_experiments):
 
-            # Set signals and image types
+            # Set signals and image types:
             IMAGES = []
             for im, imtype in zip(
                 images[exp],
                 Images_signal_type.keys()):
+
+                sig_type = Images_signal_type.get(imtype)
+
+                if sig_type == list(Images_signal_type.values())[1]:
+
+                    im = MicroSpySignal2D_Parent(im)
                 
-                im = MicroSpySignal2D(im)
+                else:
+                
+                    im = MicroSpySignal2D(im)
     
                 im.metadata.Signal.signal_type = imtype
                 
-                im.metadata.General.title = Images_signal_type.get(imtype)
+                im.metadata.General.title = sig_type
     
                 IMAGES.append(im)
             
@@ -432,8 +444,33 @@ class ParticleAnalysis:
                     
                 setattr(self, f"Images{_exp}", Images(IMAGES))
 
+    def gridify_acquisition(
+        self,
+        navigation_shape : list | tuple | None = None
+    ):
+        """Gridify the acquisition images
 
+        Parameters
+        ----------
+        navigation_shape
+            Shape of the navigation grid
+        """
+        if not hasattr(self, "Images"):
 
+            raise AttributeError("The class does not keep "
+                                "track of images. See "
+                                "the function *.load_images().")
+
+        from src.microspy._misc._misc import _vendor2ImFlipAxes
+
+        vendor = self.metadata.Acquisition_instrument.get_item("vendor")
+        
+        flip_axes = _vendor2ImFlipAxes(vendor)
+        
+        self.Images.gridify_ParentSig(
+            nav_shape = navigation_shape,
+            flip_axes = flip_axes
+        )
 
 
 
