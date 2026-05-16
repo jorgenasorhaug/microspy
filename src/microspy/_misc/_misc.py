@@ -20,14 +20,77 @@
 
 
 import numpy as np
-from hyperspy.api import model
-from src.microspy._misc import material
-from hyperspy.signals import Signal1D
 import warnings, os
-from src.microspy._misc import exceptions as _errors
+from tabulate import tabulate
 
+from . import exceptions as _errorss
+from ._utils import _utils, _io
+
+from . import material
 element_dict = material.elements
 
+VENDORS = [
+    "Jeol", "jeol",
+]
+
+# https://pythonforundergradengineers.com/unicode-characters-in-python.html
+GREEK_LETTERS = {
+    "alpha" : "\u03B1",
+    "beta" : "\u03B2",
+    "gamma" : "\u03B3",
+    "delta" : "\u03B4",
+    "epsilon" : "\u03B5",
+    "zeta" : "\u03B6",
+    "eta" : "\u03B7",
+    "theta" : "\u03B8",
+    "iota" : "\u03B9",
+    "kappa" : "\u03BA",
+    "lambda" : "\u03BB",
+    "mu" : "\u03BC",
+    "nu" : "\u03BD",
+    "xi" : "\u03BE",
+    "omicron" : "\u03BF",
+    "pi" : "\u03C0",
+    "rho" : "\u03C1",
+    "zeta" : "\u03C2",
+    "sigma" : "\u03C3",
+    "tau" : "\u03C4",
+    "upsilon" : "\u03C5",
+    "phi" : "\u03C6",
+    "chi" : "\u03C7",
+    "psi" : "\u03C8",
+    "omega" : "\u03C9",
+
+    "Alpha" : "\u0391",
+    "Beta" : "\u0392",
+    "Gamma" : "\u0393",
+    "Delta" : "\u0394",
+    "Epsilon" : "\u0395",
+    "Zeta" : "\u0396",
+    "Eta" : "\u0397",
+    "Theta" : "\u0398",
+    "Iota" : "\u0399",
+    "Kappa" : "\u039A",
+    "Lambda" : "\u039B",
+    "Mu" : "\u039C",
+    "Nu" : "\u039D",
+    "Xi" : "\u039E",
+    "Omicron" : "\u039F",
+    "Pi" : "\u03A0",
+    "Rho" : "\u03A1",
+    "Sigma" : "\u03A3",
+    "Tau" : "\u03A4",
+    "Upsilon" : "\u03A5",
+    "Phi" : "\u03A6",
+    "Chi" : "\u03A7", 
+    "Psi" : "\u03A8",
+    "Omega" : "\u03A9",
+    "Theta" : "\u03F4"
+}
+
+
+
+"""
 numpy_image_datatypes = [
     np.bool_, np.byte, np.ubyte, 
     np.int_, np.int8, np.int16, np.int32, np.int64,
@@ -35,7 +98,6 @@ numpy_image_datatypes = [
     np.float16, np.float32, np.float64
 ]
 
-"""
 def _check_for_numpy_ndarray(array):
     #Helping function to check if array is a numpy array
     return type(array) == np.ndarray
@@ -120,6 +182,9 @@ def _vendor2ImAquisitionOrder(vendor : str):
         horisontal directions : ("r2l", "l2r")
         vertical directions : ("t2b", "b2t")
     """
+    if vendor not in VENDORS:
+        raise AttributeError(f"Vendor {vendor} is not recognised. "
+                            f"Allowed vendor arguments are {VENDORS}.")
 
     if vendor.lower() == "jeol":
         return "r2l","t2b"
@@ -149,171 +214,173 @@ def _vendor2ImFlipAxes(vendor : str):
     else:
         return None, None
 
-def print_csv_metadata(csv_file):
-    """Print the stored metadata in the particle analysis *.csv file
-
-    Parameters
-    ----------
-    csv_file
-        Either the csv filename used to load the data, or the pandas DataFrame object
-    """
-    
-    if type(csv_file) == str: csv_file = pd.read_csv(str(csv_file))
-
-    csv_keys = list(csv_file.keys())
-
-    project_name = csv_keys[1]
-
-    first_col, second_col = csv_file['Project name'], csv_file[project_name]
-
-    # second_col[~first_col] is to avoid a vertical shift
-    first_col, second_col = first_col[~first_col.isnull()], second_col[~first_col.isnull()] 
-
-    # Replace nan == empty cell with empty string
-    second_col[second_col.isnull()] = ''
-    
-    for first, second in zip(first_col, second_col): print(f"{first:35}{second:<20}")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%% PRINTING PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%%%%% PROPERTY PRINTING  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-def tabulate_particles_property(data, header, label = '', return_table = False):
-    """Print selected particle's property like chemical composition or geometry
+    
+def tabulate_data(
+    data : np.ndarray, 
+    headers : list| tuple, 
+    labels : str | list | tuple | np.ndarray = '', 
+    return_table : bool = False,
+    unit : str | None = None
+):
+    """Print selected particle's property like chemical composition 
+    or geometry.
     
     Parameters
     ----------
     data
-        Data to be printed. The data is expected to fit the shape (len(header), len(label))
+        Data to be printed. The data is expected to fit the shape 
+        (len(header), len(label))
     label
         List of labels : will be printed at the left of each row 
     header
         List of headers : will be printed at the top of each column
+    unit
+        Header unit. The unit will be printed at the upper left 
 
     Returns
     -------
 
     Example:
-    >>>print_particles_property(data = (n,m) array of data, like (num elements, num particles)
-                             label = (n,) list of labels, like class names
-                             header = (m,) list of headers, like list of elements
-    >>>
+    -------
+    >>> tabulate_data(
+            data : (N,m) data array
+            label : (N,) list of labels, e.g. class names
+            headers : (m,) list of headers, e.g. elements
+        )
     """ 
 
     data_shape = data.shape
-
-    if len(data_shape) <= 2:
+    ndim = np.ndim(data)
+    
+    if ndim == 2:
         
-        if type(label) == str: 
+        # Set labels
+        if type(labels) == str:    
+            if labels == '': 
+                labels = np.arange(0, data_shape[1])
+            else:
+                labels = np.repeat(label, data_shape[0])
+
+        if data_shape[0] == len(labels) and data_shape[1] == len(headers):
+
+            # Insert labels in the 0th column
+            table = _utils._get_table(np.round(data, decimals = 2), labels)
             
-            if label == '': label = np.arange(0, data_shape[1])
-    
-        if data_shape[0] == len(header) and data_shape[1] == len(label):
+            if return_table: return table 
+
+            if unit is not None:
+                heads = headers.copy()
+                heads.insert(0, unit)
+            else: heads = headers.copy()
         
-            table = _utils._get_table(np.round(data, decimals = 2), label)
+            print(tabulate(
+                tabular_data = table, 
+                headers = heads, 
+                tablefmt="pretty")
+                 )
 
-            if return_table: return table #tabulate(table, header, tablefmt="pretty") 
+        else: 
             
-            else: print(tabulate(table, header, tablefmt="pretty"))
-
-        else: print(f"The data shape ({data_shape}) doesn't fit the header ({len(header)}) and/or label ({len(label)}) shape(s)")
+            print(f"The data shape {data_shape} doesn't fit the "
+                  f"header ({len(headers)}) and/or label ({len(labels)}) "
+                  "shape(s)")
     
-    else: print(f"Data of shape {data_shape} doesn't fit the table.")
+    else: 
+        print(f"Data of shape {data_shape} doesn't fit the table.")
 
-def save_tabulated_particles_property(data, header, label = '', path = '', filename = 'tabulates.txt'):
-    """Save the tabulated data in folder tabulates
-    
+def save_tabulate_data(
+    data : np.ndarray, 
+    headers : list| tuple, 
+    unit : str | None = None,
+    labels : str | list | tuple | np.ndarray = '', 
+    filename : str = 'tabulated.txt', 
+):
+    """Save tabulated data into a specified format as
+    stated in the filename.
+
     Parameters
     ----------
-    data, label, header: see print_particles_property
-
-    path
-        String path to store the tabulated data. 
-
+    data
+        Data to be printed. The data is expected to fit the 
+        shape (len(header), len(label))
+    label
+        List of labels : will be printed at the left of each row 
+    unit
+        Unit of the printed property.
+    header
+        List of headers : will be printed at the top of each column
     filename
-        Name of file being saved
-
-    Note! The data will be stored in a filename called tabulates.txt.
+        Name of file. By default: txt format.
     """
 
-    folder = path
+    ALLOWED_EXTENSIONS = [
+        "txt",
+        "csv"
+    ]
+    
+    file_type = os.path.splitext(filename)[-1][1:]
+    folder, filename = os.path.split(filename)
 
-    save_results = False
+    if file_type not in ALLOWED_EXTENSIONS:
+        raise AttributeError(f"File type {file_type} not recognised "
+                             "or supported yet.")
 
-    if folder[-1] != '\\' or folder[-1] != '/': folder += '\\'
+    table = tabulate_data(
+        data = data,
+        headers = headers, 
+        labels = labels, 
+        return_table = True,
+        )
 
-    if os.path.exists(folder): save_results = True
+    if unit is not None:
+        heads = headers.copy()
+        heads.insert(0, unit)
+    else: heads = headers
 
-    else: 
+    """
+    file_writers...
+    """
+
+    if file_type == "txt":
+        _io._save_tabulated_data_as_txt(
+            table = table,
+            headers = heads,
+            path = folder,
+            filename = filename
+        )   
         
-        ans = input(f"Couldn't find path {path}.\nCreate path? (y/[n])")
-
-        if ans.upper() == 'Y' or ans == '':
-
-            print(f"Creating path {path}")
-            
-            os.mkdir(path)
-
-            save_results = True
-
-    if save_results:
-
-        if header == '': header = np.arange(0, np.shape(data)[1])
-
-        table = _utils._get_table(data, label)
-
-        filename = f"{os.path.splitext(filename)[0]}.txt"
+    elif file_type == "csv":
         
-        with open(folder + filename, 'w') as f:  f.write(tabulate(table, header, tablefmt="pretty"))
+        _io._save_tabulated_data_as_csv(
+            table = table,
+            headers = heads,
+            path = folder,
+            filename = filename
+        )
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+    
+
+    
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% IMAGE MANIPULATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-def stitch_images(images, 
-                  navigation_shape, 
-                  horisontal_direction = 'r2l', 
-                  vertical_direction = 't2b'):
-    """Stitch an array of images into a 2D image. 
-
-    Parameters
-    ----------
-    images
-        Array with images to stitch. Expected shape: 4D (2 navigation, 2 image) dimensions
-    navigation_shape 
-        list or tuple of the concatenated image shape. 
-        Note that the shape should reflect the numpy convention (i.e. 20 images -> 4x5 => shape = (5,4))
-    vertical_direction
-        Vertical direction at which the images are to be stitched.
-        Allowed arguments: l2r and r2l (default: r2l: right to left)
-    horisonal_direction
-        Horisontal direction at which the images are to be stitched 
-        Allowed arguments: t2b and b2t (default: t2b: top to bottom)
-
-    Returns
-    -------
-    stitched_image 
-        Concatenated images as a numpy array
-    """
-    if not _errors._check_for_numpy_ndarray(images): 
-        
-        raise TypeError(f'Argument data_array of type {type(images)} is not a numpy ndarray')
-    
-    if not len(navigation_shape) == 2: 
-
-        if len(navigation_shape) == 1: navigation_shape = (1, navigation_shape[0])
-        
-        else: raise ValueError(f"Provided image shape {navigation_shape} is invalid. Provide a two dimensional shape.")
-
-    if images.shape[:2] == navigation_shape:
-
-        images = _image_utils._gridify_4D_array_to_3D(images)
-
-    return _image_utils._stitch_images(images, 
-                                  navigation_shape, 
-                                  horisontal_direction = horisontal_direction, 
-                                  vertical_direction = vertical_direction)
 
 def stitch_rgb_phase_map(phase_map, nav_shape):
     """Stitch a 4D or 5D array with 3 rgb channels into a single image of shape 3: (x,y,channels).
@@ -818,6 +885,8 @@ def _create_dummy_eds_spectra(labelled_image,
     -------
     1D hyperspy signal with a dummy spectrum
     """
+    from hyperspy.api import model
+    from hyperspy.signals import Signal1D
     
     E_values = np.linspace(0, Erange, int(Erange / steps))
     

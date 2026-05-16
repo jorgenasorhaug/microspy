@@ -23,14 +23,16 @@ import warnings
 from hyperspy.signals import Signal1D, Signal2D
 from hyperspy.misc import utils
 from hyperspy.utils.markers import Texts
+
 from src.microspy._misc import exceptions 
+from .utils import _image_utils
 
 from src.microspy._misc.material import (
     elements, 
     weight_to_atomic, 
     atomic_to_weight
 )
-from src.microspy.signals.utils.array_tools import (
+from .utils.array_tools import (
     _3Darray_2_4Darray,
     _4Darray_2_3Darray
 )
@@ -89,6 +91,10 @@ class MicroSpySignal1D(Signal1D):
     def shape(self) -> tuple[int, ...]:
         """Return the data shape: (num. particles | number of [properties])"""
         return self.data.shape
+
+    def _remove_nans(self):
+        """Replace nan values with zeros"""
+        self.data[np.isnan(self.data)] = 0
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%% PRIVATE FUNCTIONS %%%%%%%%%%%%%%%%%%%
@@ -174,7 +180,7 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
     @property
     def elements(self) -> list[str, ...]:
         """Return the stored elements"""
-        return self.metadata.Signal.prop
+        return self.metadata.Signal.props
 
     @property
     def matrix_elements(self) -> list[str, ...]:
@@ -198,10 +204,6 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
         print(f"Number of single element particles: {np.sum(arr)}")
         
         if return_array: return arr
-    
-    def _remove_nans(self):
-        """Replace nan values with zeros"""
-        self.data[np.isnan(self.data)] = 0
 
     def _update_concentration(self, decimals = 2):
         """Update/normalise the chemistry (to 100%)"""
@@ -455,6 +457,52 @@ class MicroSpySignal2D(Signal2D):
         self.metadata.add_node("Signal")
         self.metadata.add_node("Signal.signal_type")
 
+    def set_scale(
+        self,
+        scale : int | float,
+        unit : str = "NA"
+    ):
+        """Set navigation scale
+
+        Parameters
+        ----------
+        scale
+            scale (unit per pixel)
+        unit
+            unit
+        """
+        
+        self.axes_manager[-2].scale = scale
+        self.axes_manager[-2].units = unit
+        self.axes_manager[-1].scale = scale
+        self.axes_manager[-1].units = unit
+
+        ndim = np.ndim(self.data)
+
+        if ndim == 3:
+
+            # The images are rectangular -> cannot set a scale along unknown
+            # direction.
+            if self.axes_manager[-2].size != self.axes_manager[-1].size:
+                warnings.warn("Can not calibrate the signal.")
+            else:
+                cal = scale * self.axes_manager[-1].size
+                self.axes_manager[0].scale = cal
+                self.axes_manager[0].units = unit
+            
+        elif ndim == 4:
+            cal0 = scale * self.axes_manager[-2].size
+            cal1 = scale * self.axes_manager[-1].size
+            self.axes_manager[0].scale = cal0
+            self.axes_manager[0].units = unit
+            self.axes_manager[1].scale = cal1
+            self.axes_manager[1].units = unit
+
+        elif ndim > 4:
+            warnings.warn("Multidimensional signal. "
+                          "Manually set the scale.")
+            
+
 class MicroSpySignal2D_Parent(MicroSpySignal2D):
     """Parent signal class with attribute functions that
     allows the data to be manipulated as if images are
@@ -490,11 +538,12 @@ class MicroSpySignal2D_Parent(MicroSpySignal2D):
         Parameters
         ----------
         grid_shape
-            2D grid shape
-
-            Assuming the data shape is (X, W, H),
-            the data will be reshaped into grid_shape 
-            + (W, H)
+            2D grid shape.
+            Assuming the data shape is (X, W, H), the data 
+            will be reshaped into grid_shape + (W, H)
+        flip_axis 
+            Depending on the image acquisition order,
+            flip the images along specified axis/axes. 
         """
 
         if not self.is_gridified:
@@ -505,29 +554,27 @@ class MicroSpySignal2D_Parent(MicroSpySignal2D):
             assert N == np.prod(grid_shape), errtxt
 
             # Gridifying the signal:
-
             grid = _3Darray_2_4Darray(
                 arr = self.data,
                 to_shape = grid_shape,
                 flip_axis = flip_axis
             )
-
             # Reset signal
             self.__init__(grid)
 
         else: print("The signal is already gridified.")
 
-    def degridify(self):
-        """Gridify the images into a 4D grid
+    def degridify(
+        self,
+        flip_axis : int | list | None = 1
+    ):
+        """Degridify the images into a 4D grid
 
         Parameters
         ----------
-        grid_shape
-            2D grid shape
-
-            Assuming the data shape is (X, W, H),
-            the data will be reshaped into grid_shape 
-            + (W, H)
+        flip_axis 
+            Depending on the image acquisition order,
+            flip the images along specified axis/axes. 
         """
 
         if self.is_gridified:
@@ -540,35 +587,28 @@ class MicroSpySignal2D_Parent(MicroSpySignal2D):
 
             # Reset signal
             self.__init__(degrid)
-
+            
         else: print("The signal is already degridified.")
-        
 
 class Images:
     """A class to keep track of and manipulate acquired
     SEM images. The images are hyperspy 2D signals.
     """
     def __init__(self, images : list | np.ndarray) -> None:
-
         from src.microspy.io._images import _io
 
         # Images to MicroSpySignal2D
         images = _io._arrays2signals(images)
-
         sig_types = []
         
         for im in images:
-
             sig_types.append(im.metadata.Signal.signal_type)
-            
             setattr(self, sig_types[-1], im)
 
         self.phase_maps = dict()
-
         self._create_metadata()
 
         for sig_type in sig_types:
-
             # Set a brief description of the signal type
             self.metadata.set_item(
                 f"Signals.{sig_type}", 
@@ -581,11 +621,12 @@ class Images:
         # General overview:
         dim = self.num_signals
         title = self.metadata.General.title
-        print_string = f"<Images class, title: {title}," 
+        print_string = f"<Images class, title: {title}, " 
         print_string += f"dimensions: ({dim}|)>:\n"
 
-        # Signal soverview:
+        # Signals overview:
         sig_types = self.metadata.Signals.as_dictionary()
+        
         for counter, key in enumerate(sig_types.keys()):
             _sig = vars(self).get(key)
             title = _sig.metadata.General.title
@@ -593,10 +634,12 @@ class Images:
             dim = f"({_dim[:-2]}|{_dim[-2:]})".replace(
                 "(","").replace(")","")
             sig_string = f"<title: {title}, dimensions: ({dim})" 
+            
             if counter < len(sig_types) - 1:
                 print_string += f"├── {key}: {sig_string}\n"
             else:
                 print_string += f"└── {key}: {sig_string}\n"
+        
         return print_string
 
     def _create_metadata(self):
@@ -607,6 +650,83 @@ class Images:
         md.add_node("Signals")
         self._original_metadata = utils.DictionaryTreeBrowser()
         
+    def calibrate_signals(
+        self,
+        scale : int | float,
+        unit : str = "NA",
+        upsamplingChildSigFac : int | float = 1
+    ):
+        """Calibrate attribute signals.
+
+        Parameters
+        ----------
+        scale
+            ParentSig scale (unit per pixel)
+            
+            Note!
+            The CompositeSig might be binned, so a factor is used
+            when calibrating the CompositeSig. 
+        unit
+            scale unit
+        upscaledChildSig
+            Whether the child signal is upsampled or not, i.e.
+            the childSig has a higher resolution than the ParentSig.
+        upscalingFac
+            upsampling factor.
+        """
+        print("Check particle dimensions wrt. ParentSig!")
+
+        self._metadata.Signals.scale = scale
+        self._metadata.Signals.unit = unit
+
+        if hasattr(self, "CompositeSig"):
+            # Adjust scale if CompositeSig has a different size than 
+            # ParentSig.
+            fac = self.ParentSig.data.size / self.CompositeSig.data.size
+            self.CompositeSig.set_scale(
+                scale = fac * scale,
+                unit = unit
+            )
+        
+        if hasattr(self, "ParentSig"):
+            # Iterate through all Parent signal types:
+            for attr, value in self.__dict__.items():
+                if isinstance(value, MicroSpySignal2D_Parent):
+                    self.__dict__[attr].set_scale(
+                        scale = scale,
+                        unit = unit
+                        )
+            
+            
+        if hasattr(self, "ChildSig"):
+            self.ChildSig.set_scale(
+                scale = upsamplingChildSigFac * scale,
+                unit = unit
+            )
+            
+    @property
+    def navigation_unit(self):
+        """Get calibration unit"""
+        if hasattr(self._metadata.Signals, "unit"):
+            return self._metadata.Signals.unit
+        else:
+            print("The signal hasn't been calibrated yet.")
+
+    @property
+    def navigation_scale(self):
+        """Get calibration unit"""
+        if hasattr(self._metadata.Signals, "scale"):
+            return self._metadata.Signals.scale
+        else:
+            print("The signal hasn't been calibrated yet.")
+
+    @property
+    def is_calibrated(self):
+        """Check if the signals are calibrated"""
+        if hasattr(self._metadata.Signals, "scale") and hasattr(self._metadata.Signals, "unit"):
+            return True
+        else: return False
+    
     @property
     def is_gridified(self):
         """Check if the Parent signal is gridified
@@ -624,7 +744,12 @@ class Images:
             data is gridified into shape (c,1,X,Y).
         """
         if hasattr(self, "ParentSig"):
-            return self.ParentSig.is_gridified
+            _gridified = True
+            # Iterate through all Parent signal types:
+            for attr, value in self.__dict__.items():
+                if isinstance(value, MicroSpySignal2D_Parent):
+                    _gridified *= self.__dict__[attr].is_gridified
+            return _gridified
         else: 
             raise AttributeError("The class has no parent signal.")
 
@@ -639,23 +764,67 @@ class Images:
         ----------
         nav_shape
             Shape of the navigation grid
+        flip_axes 
+            Depending on the image acquisition order,
+            flip the images along specified axis/axes. 
         """
 
         if not hasattr(self, "ParentSig"):
-
             raise AttributeError("The signal class does not keep "
                                 "track of acqiusition images. "
                                 "See *.setParentSig().")
 
         if self.is_gridified:
-
             print("The signal is already gridified.")
+        
+        else:    
+            # Iterate through all the MicroSpySignals2D_Parent
+            for attr, value in self.__dict__.items():
+                if isinstance(value, MicroSpySignal2D_Parent):
+                    self.__dict__[attr].gridify(
+                        grid_shape = nav_shape,
+                        flip_axis = flip_axes
+                    )
+                    
+        # Update calibration:
+        if self.is_calibrated:
+            self.calibrate_signals(
+                scale = self.navigation_scale,
+                unit = self.navigation_unit
+            )
+        
+    def degridify_ParentSig(
+        self,
+        flip_axes : int | tuple | list = None
+    ):
+        """Gridify the Parent signal images
 
+        Parameters
+        ----------
+        flip_axes 
+            Depending on the image acquisition order,
+            flip the images along specified axis/axes. 
+        """
+
+        if not hasattr(self, "ParentSig"):
+            raise AttributeError("The signal class does not keep "
+                                "track of acqiusition images. "
+                                "See *.setParentSig().")
+
+        if not self.is_gridified:
+            print("The signal is already degridified.")
         else:
-
-            self.ParentSig.gridify(
-                grid_shape = nav_shape,
-                flip_axis = flip_axes
+            for attr, value in self.__dict__.items():
+                if isinstance(value, MicroSpySignal2D_Parent):
+                    self.__dict__[attr].degridify(
+                        flip_axis = flip_axes
+                    )
+            
+        # Update calibration:
+        if self.is_calibrated:
+            self.calibrate_signals(
+                scale = self.navigation_scale,
+                unit = self.navigtaion_unit
             )
 
     @property
@@ -676,7 +845,7 @@ class Images:
         self,
         current_name : str
     ):
-        """NOT TESTED | Set the parent signal, i.e. the instance 
+        """ Set the parent signal, i.e. the instance 
         attribute name will be changed to "ParentSig".
 
         Parameters
@@ -716,7 +885,7 @@ class Images:
         self,
         current_name : str
     ):
-        """NOT TESTED | Set the child signal, i.e. the instance 
+        """Set the child signal, i.e. the instance 
         attribute name will be changed to "ChildSig".
 
         Parameters
@@ -756,4 +925,71 @@ class Images:
             raise AttributeError("The signal class doesn't have "
                                 "an instance attribute named "
                                 f"{current_name}, but \n{self.__repr__}")
-    
+
+    def map_ChildSig_onto_ParentSig(
+        self,
+        vendor,
+        labelling : bool = True,
+        matrix_label : int = -1,
+        return_map : bool = False,
+        **kwargs
+    ):
+        """Map the Child images onto the Parent array.
+        
+        The function used template_match to identify and map 
+        the Child arrays onto the parent array.
+
+        Parameters
+        ----------
+        
+        """
+        if not hasattr(self, "ParentSig") and not hasattr(self, "ChildSig"):
+            raise AttributeError("Parent and/or Child signal has not been"
+                                "set yet. See :func: setParentSig()/"
+                                 "setChildSig().")
+
+        """
+        extensions...
+        plugins...
+        """
+
+        if vendor.lower() in ["jeol"]:
+
+            # SEM images:
+            if self.is_gridified:
+                to_grid = self.ParentSig.axes_manager.navigation_shape
+                self.ParentSig.degridify()
+                parentArr = self.ParentSig.data.copy()
+                self.ParentSig.gridify(to_grid)
+            else:
+                parentArr = self.ParentSig.data.copy()
+            
+            # e.g. np.asarray([0, 0, 0, 1, 1, ... 16, 16])
+            parentOrder = kwargs.get("acquisition_order")
+
+        if not isinstance(parentOrder, np.ndarray):
+            raise ValueError("NEED TO FIGURE OUT A WAY TO FIX THIS!")
+
+        # Depadded particle images
+        childArr = self.ChildSig.data.copy()
+
+        # Whether to use nested progressbar or not
+        nested_progressbar = kwargs.get("nested_progressbar")
+        if not nested_progressbar:
+            nested_progressbar = len(childArr) > 500
+
+        label_maps = _image_utils._map_particle_regions(
+            childArray = childArr,
+            parentArray = parentArr,
+            parentOrder = parentOrder,
+            background_label = matrix_label,
+            nested_progressbar = nested_progressbar
+        )
+
+        print("Allocating MicroSpySignal2D_Parent 'Child_map' "
+              "to Images.")
+        self.Child_Map = MicroSpySignal2D_Parent(label_maps)
+        if self.is_gridified: self.Child_Map.gridify(to_grid)
+        self._metadata.Signals.Child_Map = "Mapped_ChildSig"
+
+        if return_map: return label_maps

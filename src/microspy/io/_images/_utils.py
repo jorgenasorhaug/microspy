@@ -17,6 +17,10 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
+ALLOWED_VENDORS = [
+    "Jeol"
+]
+
 def _image_directory_searcher(
     vendor : str
 ) -> str:
@@ -35,6 +39,9 @@ def _image_directory_searcher(
     """
     
     vendor = str(vendor)
+    if vendor not in ALLOWED_VENDORS:
+        raise ValueError(f"Vendor {vendor} not recognised "
+                         "or supported yet.")
     
     """
     vendors ...
@@ -47,3 +54,4 @@ def _image_directory_searcher(
         )
 
     return reader
+

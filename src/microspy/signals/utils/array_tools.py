@@ -23,14 +23,14 @@ from src.microspy._misc import exceptions
 allowed_hor_dirs = ("l2r", "r2l")
 allowed_vert_dirs = ("t2b", "b2t")
 
-def stitch_array(
+"""def stitch_array(
     image_array : np.ndarray,
     navigation_shape : tuple | list | None = None, 
     horisontal_order_direction : str = "r2l", 
     vertical_order_direction : str = "t2b", 
     scale : int | float | None | np.integer | np.float = None
 ) -> np.ndarray:
-    """Stitch the individual images according to argument
+    Stitch the individual images according to argument
     directions.
 
     Note!
@@ -66,7 +66,7 @@ def stitch_array(
     -------
     stitched_array
         Stitched images
-    """
+    
     
     if horisontal_order_direction not in allowed_hor_dirs:
 
@@ -138,6 +138,7 @@ def stitch_array(
     stitched = stitched.transpose(0, 2, 1, 3)
     stitched = stitched.reshape(rows * H, cols * W)
     return stitched
+"""
 
 def _3Darray_2_4Darray(
     arr : np.ndarray, 
@@ -230,22 +231,17 @@ def _4Darray_2_3Darray(
         Reshaped array into 4D grid
     """
 
-    Y, X, H, W = arr.shape
-        
-    new_shape = (Y*X,) + (H,W)
-
+    Y,X,H,W = arr.shape
+    new_shape = (Y * X,) + (H, W)
     degrid = arr
 
     if flip_axis is not None:
 
         if isinstance(flip_axis, int | np.integer):
-    
-            flip_axes = (flip_axis,)
+            flip_axis = (flip_axis,)
 
-        for flip in flip_axes:
-            
+        for flip in flip_axis:
             if flip not in (0,1):
-                
                 raise AttributeError("Axis flipping along axis "
                                      f"{flip} is not supported.")
 

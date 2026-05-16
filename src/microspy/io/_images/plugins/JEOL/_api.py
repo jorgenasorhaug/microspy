@@ -22,7 +22,7 @@ import numpy as np
 import warnings
 from pathlib import Path
 
-from tqdm import tqdm
+from tqdm import tqdm_notebook
 
 from src.microspy.io._utils import (
     _identify_filenames_of_interest,
@@ -61,33 +61,24 @@ def _load_stub_image(
     path = Path(path)
 
     try:
-        
         patched_im_filename = _identify_filenames_of_interest(
             path = path,
             keyword = image_extension
         )
 
         if len(patched_im_filename) > 1:
-
             raise warnings.warn(f"{len(patched_im_filename)} images were found the directory.")
-
         else: patched_im_filename = patched_im_filename[0]
-
-        print('Reading patched view images...')
         
         # 4 channels of which all contain the same information ...
         patched_im = plt.imread(path / patched_im_filename)[...,0]
 
     except FileNotFoundError:
-
         warnings.warn(f"The patched image in directory\n{path}\nCould not be found.")
-
         return np.asarray([], np.uint8)
 
     if set_dtype is not None: 
-        
         if check_array_compatibility_with_new_datatype(patched_im, set_dtype): 
-            
             patched_im = patched_im.astype(set_dtype)
 
     return patched_im
@@ -140,13 +131,13 @@ def _load_view_images(
     # Needed to set an initial size.
     first = True
 
-    for fol, idx in tqdm(
+    for fol, idx in tqdm_notebook(
         zip(
             folders,
             np.arange(len(folders))
             ), 
         total = len(folders),
-        desc = "Loading View Images",
+        desc = "Parent Images",
         position = 0
     ):
 
@@ -159,10 +150,9 @@ def _load_view_images(
 
             # If more than one image is found:
             if len(image_filename) > 1: 
-
                 if image_extension[0] == '.': 
                     image_extension = image_extension[1:]
-
+                    
                 image_filename = _identify_filenames_of_interest(
                     path = path / fol, 
                     keyword = f'ViewImage.{image_extension}'
@@ -171,25 +161,24 @@ def _load_view_images(
             else: image_filename = image_filename[0]
                 
             first_im = plt.imread(path / fol / image_filename)
-
             im_shape = first_im.shape
 
             # Identify a proper image data type
             if set_dtype is not None: 
-        
-                if check_array_compatibility_with_new_datatype(first_im, set_dtype): 
-                    
+                if check_array_compatibility_with_new_datatype(
+                    first_im, set_dtype
+                ): 
                     first_im = first_im.astype(set_dtype)
-
             else: set_dtype = float
-
-            view_images = np.zeros(((len(folders),) + im_shape), dtype = set_dtype)
-
+                
+            view_images = np.zeros(((len(folders),) + im_shape), 
+                                   dtype = set_dtype)
             view_images[idx] = first_im
-
             first = False
 
-        else: view_images[idx] = plt.imread(path / fol / image_filename).astype(set_dtype)
+        else: view_images[idx] = plt.imread(
+            path / fol / image_filename
+        ).astype(set_dtype)
 
     return view_images
 
@@ -257,21 +246,18 @@ def _load_particle_images(
     # Image indexer
     p = 0
     
-    for fol in tqdm(
+    for fol in tqdm_notebook(
         folders, 
-        desc = "Loading particle images",
+        desc = "Child Images",
         position = 0
     ):
-
         fol, subdirs = _identify_subdirectories_of_interest(
             path = str(path / fol),
             keyword = 'Particle'
         )
-
         subdirs = np.sort(subdirs)
 
         for pim in subdirs:
-
             filename = _identify_filenames_of_interest(
                 path = path / fol / pim,
                 keyword = image_extension
@@ -283,28 +269,23 @@ def _load_particle_images(
                                         "image in directory {path / fol /"
                                         "pim}, but {len(filename)} were "
                                         "found.")
-
             else: filename = filename[0]
 
             directory = path / fol / pim / filename
 
             # Read particle image
             tmp = plt.imread(directory)
-            
             shape = np.shape(tmp)
 
             # Create an array matching the first particle image's shape
             if first:
-                
-                particle_images = np.zeros(((num_images),) + shape, 
-                                           dtype = tmp.dtype)
-            
+                particle_images = np.zeros(
+                    ((num_images),) + shape, dtype = tmp.dtype
+                )
                 particle_images[p, ...] = tmp.copy()
-
                 first = False
 
             else: 
-
                 old_shape = particle_images.shape[-2:]
 
                 # (n_images, y, x)
@@ -315,17 +296,16 @@ def _load_particle_images(
                 )
 
                 pad_width *= (pad_width > 0)
-                
                 # pad the array if the new image is larger | (n_before, n_after)
                 if pad_width.sum() > 0: 
-                    
-                    particle_images = np.pad(particle_images, 
-                                             mode = 'constant', 
-                                             constant_values = 0,
-                                             pad_width = pad_width)
+                    particle_images = np.pad(
+                        particle_images,
+                        mode = 'constant', 
+                        constant_values = 0,
+                        pad_width = pad_width
+                    )
     
                 particle_images[p, :shape[0], :shape[1]] = tmp.copy()
-
             p += 1
 
     if centre_particle_images:
@@ -338,11 +318,12 @@ def _load_particle_images(
     
         empty_pIm = np.zeros_like(particle_images[0])
     
-        print('Centring the particle images...')    
         for i in range(num_images):
     
             # Centre of mass
-            cm = np.round(np.asarray(center_of_mass(particle_images[i] > 0))).astype(int)
+            cm = np.round(np.asarray(
+                center_of_mass(particle_images[i] > 0)
+            )).astype(int)
     
             # Where the data is to be extracted from
             _from = np.where(particle_images[i] > 0) 
@@ -352,17 +333,14 @@ def _load_particle_images(
                     _from[1] + p_im_centre[1] - cm[1] - 1) 
             
             empty_pIm[_to] = particle_images[i][_from]
-    
             particle_images[i].fill(0)
-            
             particle_images[i] = empty_pIm.copy()
-    
             empty_pIm.fill(0) 
 
     if set_dtype is not None: 
-        
-        if check_array_compatibility_with_new_datatype(particle_images, set_dtype):
-            
+        if check_array_compatibility_with_new_datatype(
+            particle_images, set_dtype
+        ):
             particle_images = particle_images.astype(set_dtype)
 
     return particle_images

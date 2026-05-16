@@ -73,11 +73,11 @@ def load_images(
             particle images
     """
     from pathlib import Path
-
-    # Currently only supporting Jeol's version
-    vendor = 'jeol'
     
     folder = str(path)
+
+    warnings.warn("Currently only supporting Jeol's version")
+    vendor = 'jeol'
 
     """
     vendors ...

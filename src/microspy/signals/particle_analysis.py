@@ -35,14 +35,6 @@ from src.microspy.signals._microspy_signals import (
 
 from hyperspy.misc import utils
 
-AVAILABLE_CHEM_UNITS = [
-    ['At %', 'At%', '[At %]','[At%]','At.%','[At.%]','at%', '[at%]','at.%','[at.%]',],
-    ['Mass %', 'Mass%','[Mass %]','[Mass%]','mass%','[mass%]','wt.%','Wt.%','[wt.%]','[Wt.%]','[wt%]','[Wt%]']
-]
-
-
-
-
 class ParticleAnalysis:
     """Particle analysis class
 
@@ -84,7 +76,9 @@ class ParticleAnalysis:
         self._original_classes(classes = classes)
         self._set_particle_classification(
             class_array = classes, 
-            Unclassified_kw = kwargs.get('Unclassified_kw') if 'Unclassified_kw' in kwargs else "Unclassified" 
+            Unclassified_kw = kwargs.get(
+                'Unclassified_kw'
+            ) if 'Unclassified_kw' in kwargs else "Unclassified" 
         )
         
         # Initialise metadata structure
@@ -95,44 +89,60 @@ class ParticleAnalysis:
 
         print("OBS! Mutliple stubs has not been tested yet!")
 
-        calibrated = False
-
-        cal_string = ''
-        
-        read_images = False
-
-        grid_string = ''
-
-        if hasattr(self, 'Images'):
-
-            read_images = True
-
-            #if hasattr(self.metadata, 'navigation_unit'):
-
-            #    calibrated = True
+        cal_string = ""
+        grid_string = ""
+        cal_string = ""
+        read_images = True if hasattr(self, 'Images') else False 
+        num_particles = len(self.particle_classes)
 
         if read_images:
-
-            grid_string = str(self.Images.navigation_shape)[1:-1] + ' | '
-
-        if calibrated: 
-
-            scan_area = np.prod(self.Images.navigation_shape) * np.prod(self.Images.signal_shape)
-
-            scan_area *= np.square(self.metadata.navigation_scale)
-
-            num_density = self.number_of_particles / scan_area
-
-            area_density = np.sum(self.Particles.particle_geometry['Area [um²]']) / scan_area
+            # 'MicroSpySignal2D_Parent, title: ..., dimensions: (X, Y|x, y | #)'
+            gs_i = str(self.Images.ParentSig).index("(") + 1
+            grid_string = str(self.Images.ParentSig)[gs_i:-2] + '|'
             
-            decimal_position_n = _utils.first_nonzero_decimal_position(num_density)
+            if self.Images.is_calibrated: 
+                
+                unit = self.Images.unit
+                
+                # Num. pixels
+                scan_area = np.prod(
+                    self.Images.CompositeSig.data.shape
+                )
+                # Scaled:
+                scan_area *= np.square(
+                    self.Images.metadata.Signals.scale
+                )
 
-            decimal_position_a = _utils.first_nonzero_decimal_position(area_density)
+                # Number density
+                particle_density = num_particles / scan_area
 
-            cal_string = f'\nScan unit: {self.metadata.navigation_unit}\nParticle number density: {round(num_density, decimal_position_n + 2)} 1/{self.metadata.navigation_unit}\u00b2\nParticle area density: {round(100 * area_density, decimal_position_a + 2)} %'
+                # Area density
+                area_index = self.Geometry.prop.index("Area")
+                area_density = np.sum(
+                    self.Geometry.data[area_index]
+                ) / scan_area
+                
+                #decimal_position_n = _utils.first_nonzero_decimal_position(num_density)
+                decimal_position_n = 2
+                #decimal_position_a = _utils.first_nonzero_decimal_position(area_density)
+                decimal_position_a = 2
+                
+                cal_string = f"\nScan unit: {unit}\n"
+                cal_string += f"Particle number density: {round(
+                    particle_density, 
+                    decimal_position_n + 2
+                )} "
+                cal_string += f"1/{unit}\u00b2\n"
+                cal_string += f"Particle area density: {round(
+                    100 * area_density, 
+                    decimal_position_a + 2
+                )} %"
+
+        else: cal_string = ""
         
-        #pa_string = f"<Particle analysis, title: {self.metadata.General.project_name}, dimensions: ({grid_string}{self.number_of_particles})>{cal_string}"
-        pa_string = ''
+        pa_string = f"<Particle analysis, title: {self.metadata.General.title}, "
+        pa_string += f"dimensions: ({grid_string}{num_particles})>{cal_string}"
+        
         return pa_string
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -260,21 +270,18 @@ class ParticleAnalysis:
         """
 
         tot_particles = self.metadata.Sample.particles
-        print(tot_particles)
+        
         # Checking input array
         if isinstance(particles, np.ndarray): 
 
             if len(particles) != tot_particles:
-
                 if np.max(particles) >= tot_particles:
-
                     raise ValueError(f"The provided array of shape {particles.shape}",
                                 "is not compatible with the total number of particles.")
 
                 else: 
 
                     num_particles = len(particles) # "np.where()"
-                    
                     particles = (particles)
             
             else: 
@@ -282,44 +289,32 @@ class ParticleAnalysis:
                 num_particles = np.sum(particles)
 
         elif isinstance(particles, tuple): # np.where()
-
             if isinstance(particles[0], np.ndarray) and len(particles[0]) > 0:
-
                 if particles[0].max() >= tot_particles:
-
                     raise ValueError("The indices exceeds the total "
                                      "number of particles.")
-
             else:
-
                 return print("No particles to classify.")
                 
             num_particles = len(particles[0])
 
         if num_particles == 0: 
-
             return print('No particles to classify.')
         
         # Checking labels
         if isinstance(labels, tuple | list | np.ndarray):
 
             if len(labels) != tot_particles:
-
                 if len(labels) != num_particles:
-
                     if len(labels) == 1:
-
                         labels = np.asarray(labels * tot_particles)
-
-                    else:
-                        
+                    else:                      
                         raise ValueError(f"The number of labels ({len(labels)}) "
                                          "do not match the the number of "
                                          "particles to classify "
                                         f"({num_particles}).")
-            
             labels = np.asarray(labels)
-
+            
         else: labels = str(labels)
         
         class_array = np.asarray(['Unclassified'] * tot_particles)
@@ -331,7 +326,7 @@ class ParticleAnalysis:
         )
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #%%%%%%%%%%%%%% IMAGE ACQUISITION %%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%5 IMAGES %%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     def load_images(
@@ -355,7 +350,7 @@ class ParticleAnalysis:
         
         vendor = self.metadata.Acquisition_instrument.vendor
 
-        # Look for a potential directory
+        # Search for a potential directory
         if directory == None:
 
             from src.microspy.io._images._utils import (
@@ -381,7 +376,7 @@ class ParticleAnalysis:
         
         """
         readers ...
-        subdir_keyword
+        subdir_keyword ...
         """
 
         # Load subdirectory keyword unique for vendor (if any) 
@@ -407,7 +402,6 @@ class ParticleAnalysis:
 
         # Multiple experiments:
         for exp in range(num_experiments):
-
             # Set signals and image types:
             IMAGES = []
             for im, imtype in zip(
@@ -417,38 +411,53 @@ class ParticleAnalysis:
                 sig_type = Images_signal_type.get(imtype)
 
                 if sig_type == list(Images_signal_type.values())[1]:
-
                     im = MicroSpySignal2D_Parent(im)
-                
                 else:
-                
                     im = MicroSpySignal2D(im)
     
                 im.metadata.Signal.signal_type = imtype
-                
                 im.metadata.General.title = sig_type
     
                 IMAGES.append(im)
             
             if num_experiments == 1:
-
                 # If single experiment:
                 self.Images = Images(IMAGES)
-
             else:
-
                 # If multiple experiments:
                 if exp < 10: _exp = f"0{exp}"
-
                 else: _exp = str(exp)
-                    
                 setattr(self, f"Images{_exp}", Images(IMAGES))
 
-    def gridify_acquisition(
+    def calibrate_navigation(
+        self,
+        scale : int | float,
+        unit : str = "NA"
+    ):
+        """Calibrate the navigation signal
+        
+        Parameters
+        ----------
+        scale
+            Navigation scale (unit per pixel)
+        unit 
+            Spatial unit
+        """
+        if not hasattr(self, "Images"):
+            raise AttributeError("The class does not keep "
+                                "track of images. See "
+                                "the function *.load_images().")
+
+        self.Images.calibrate_signals(
+            scale = scale,
+            unit = unit
+        )
+    
+    def gridify_ParentSig(
         self,
         navigation_shape : list | tuple | None = None
     ):
-        """Gridify the acquisition images
+        """Gridify the acquisition images.
 
         Parameters
         ----------
@@ -463,8 +472,7 @@ class ParticleAnalysis:
 
         from src.microspy._misc._misc import _vendor2ImFlipAxes
 
-        vendor = self.metadata.Acquisition_instrument.get_item("vendor")
-        
+        vendor = self.metadata.Acquisition_instrument.get_item("vendor")        
         flip_axes = _vendor2ImFlipAxes(vendor)
         
         self.Images.gridify_ParentSig(
@@ -472,6 +480,69 @@ class ParticleAnalysis:
             flip_axes = flip_axes
         )
 
+    def degridify_ParentSig(
+        self
+    ):
+        """Degridify the acquisition images.
+        """
+        if not hasattr(self, "Images"):
+            raise AttributeError("The class does not keep "
+                                "track of images. See "
+                                "the function *.load_images().")
+
+        from src.microspy._misc._misc import _vendor2ImFlipAxes
+
+        vendor = self.metadata.Acquisition_instrument.get_item("vendor")
+        flip_axes = _vendor2ImFlipAxes(vendor)
+        
+        self.Images.degridify_ParentSig(
+            flip_axes = flip_axes
+        )
+
+    def map_particles(
+        self,
+        vendor : str = "",
+        label_particles : bool = True,
+        matrix_label : int = -1
+        **kwargs
+    ):
+        """Map particles' positions onto the Parent signal.
+        The function uses template_match to identify the particles
+        in the Parent signal.
+
+        Parameters
+        ----------
+        """
+        if not hasattr(self, "Images"):
+            raise AttributeError("The signal doesn't keep track of "
+                                 "any images. See *.load_images()")
+        
+        if not vendor:
+            vendor = self.metadata.Acquisition_instrument.vendor
+
+        if vendor.lower() in ["jeol"]:
+            # Get acquisition order
+            namesId = self.metadata.Additional_data.keywords.index("Label name")
+            label_names = self.metadata.Additional_data.data[:,namesId]
+            stringLength = len(max(label_names, key=len))
+            charSplit = np.char.split(
+                label_names.astype(f"U{stringLength}"), 
+                sep="-"
+            )
+
+            # Vendor starting index = 1
+            kwargs["acquisition_order"] = np.array(
+                [parts[1] for parts in charSplit],
+                dtype = int
+            ) - 1 
+            
+        
+        self.Images.map_ChildSig_onto_ParentSig(
+            vendor = vendor,
+            labelling = label_particles,
+            matrix_label = matrix_label,
+            **kwargs
+        )
 
 
 #####################################################
