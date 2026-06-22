@@ -24,6 +24,7 @@ import pandas as pd
 from pathlib import Path
 import warnings, re, os
 import numpy as np
+import warnings
 
 from src.microspy._misc import exceptions 
 from src.microspy.io._utils import(
@@ -48,7 +49,8 @@ def file_reader(filename : str | Path):
         [particle chemistry, particle geometry, and original metadata]
     """
 
-    warnings.warn("\nMultiple stubs have not been tested yet ...")
+    warnings.warn("\nMultiple stubs have not been tested yet ...",
+                 UserWarning)
 
     # Data dictionary
     acquisition = {}
@@ -71,7 +73,7 @@ def file_reader(filename : str | Path):
     data, additional_data = _get_acquisition_data_from_file(file)
 
     # Read the total number of investigated particles
-    num_particles = mdv[mdk == 'Summary']
+    num_particles = mdv[mdk == "Summary"]
     if isinstance(num_particles, np.ndarray):
         num_particles = num_particles[0]
 
@@ -80,65 +82,65 @@ def file_reader(filename : str | Path):
     # Update metadata
     md.update(
         {
-            'General' : {
-                'original_filename' : filename,
-                'title' : pname,
+            "General" : {
+                "original_filename" : filename,
+                "title" : pname,
+                "manufacturer" : "Jeol"
             },
-            'Sample' : {
-                'elements' : data['chemistry']['props'],
-                'particles' : num_particles,
-                'classes' : additional_data['classification'],
+            "Sample" : {
+                "elements" : data["chemistry"]["props"],
+                "particles" : num_particles,
+                "classes" : additional_data["classification"],
             },
-            'Acquisition_instrument' : {
-                'vendor' : 'Jeol',
+            "Acquisition_instrument" : {
+                "vendor" : "Jeol",
                 #'Stubs' : mdv[stubs]
-                
             },
-            'Additional_data' : additional_data
+            "Additional_data" : additional_data
         }
     )
-    del additional_data['classification']
+    del additional_data["classification"]
 
     # Iterate through all the stubs stored in the metadata; 
     # these are separated by the keyword 'Stub name'
-    karr = np.where(mdk == 'Stub name')[0]
+    karr = np.where(mdk == "Stub name")[0]
     # The first instance is a general overview. Ignore this
     for k in karr[1:]:
-        md['Acquisition_instrument'].update(
+        md["Acquisition_instrument"].update(
             {
-                f'{mdv[k]}' : {
-                    'magnification' : mdv[k+1],
-                    'X_size[mm]' : mdv[k+2],
-                    'Y_size[mm]' : mdv[k+3],
-                    'reservation_area' : mdv[k+4],
-                    'reserved_views' : mdv[k+5],
-                    'analysed_area' : mdv[k+6],
-                    'analysed_views' : mdv[k+7],
-                    'acquisition_time' : mdv[k+8]
+                f"{mdv[k]}" : {
+                    "magnification" : mdv[k+1],
+                    "X_size[mm]" : mdv[k+2],
+                    "Y_size[mm]" : mdv[k+3],
+                    "reservation_area" : mdv[k+4],
+                    "reserved_views" : mdv[k+5],
+                    "analysed_area" : mdv[k+6],
+                    "analysed_views" : mdv[k+7],
+                    "acquisition_time" : mdv[k+8]
                 }
             }
         )
     
     # Set the metadata and the data
-    acquisition['metadata'] = md
-    acquisition['original_metadata'] = omd
-    acquisition['data'] = data
+    acquisition["metadata"] = md
+    acquisition["original_metadata"] = omd
+    acquisition["data"] = data
     #acquisition['additional_data'] = additional_data
 
     axes = {
-        'chemistry' : {
-            'size' : acquisition['data']['chemistry']['data'].shape,
-            'name' : 'composition',
-            'unit' : acquisition['data']['chemistry']['units']
+        "chemistry" : {
+            "size" : acquisition["data"]["chemistry"]["data"].shape,
+            "name" : "composition",
+            "unit" : acquisition["data"]["chemistry"]["units"]
         },
-        'geometry' : {
-            'size' : acquisition['data']['geometry']['data'].shape,
-            'name' : acquisition['data']['geometry']['props'],
-            'units' : acquisition['data']['geometry']['units'],
+        "geometry" : {
+            "size" : acquisition["data"]["geometry"]["data"].shape,
+            "name" : acquisition["data"]["geometry"]["props"],
+            "units" : acquisition["data"]["geometry"]["units"],
         }
     }
 
-    acquisition['axes'] = axes
+    acquisition["axes"] = axes
     
     return [acquisition]
     
@@ -151,10 +153,11 @@ def _get_acquisition_data_from_file(
         'area',
         'ratio',
         'roundness',
-        'orientation']
+        'orientation'
+    ]
 ) -> tuple[dict, dict]:
-    """Get acquisition data such as label name, analysis dat, class name, 
-    and stub positions.
+    """Get acquisition data such as label name, analysis dat, 
+    class name, and stub positions.
 
     Arguments
     ---------
@@ -163,8 +166,8 @@ def _get_acquisition_data_from_file(
     read_from_column
         column ID to start reading from
     geometric_keywords
-        Geometric keywords to search for in order to identify particles' 
-        geometric properties
+        Geometric keywords being serached for to identify geometric 
+        properties. 
 
     Returns
     -------
@@ -177,7 +180,7 @@ def _get_acquisition_data_from_file(
         ├── chemistry/
         │   ├── elements
         │   ├── data (n,m) 
-        │   └── unit
+        │   └── units
         └── geometry/
             ├── prop
             ├── data (n,o) 
@@ -204,8 +207,7 @@ def _get_acquisition_data_from_file(
     """
 
     from src.microspy._misc.material import elements
-
-    ELEMENTS = list(elements.keys())[1:]
+    ELEMENTS = list(elements.keys())
 
     # Making sure all the keywords are lower case
     geometric_keywords = [word.lower() for word in geometric_keywords]
@@ -228,21 +230,25 @@ def _get_acquisition_data_from_file(
             elements.append(fw)
             if unit == '': unit = last_words[idx]
             elif unit != last_words[idx]:
-                warnings.warn(f"The chemical unit of element {fw} ({last_words[idx]}) is different from the registered chemical unit {unit}!")
+                warnings.warn(f"The chemical unit of element {fw} "
+                              f"({last_words[idx]}) is different from "
+                              f"the registered chemical unit {unit}!",
+                              UserWarning)
 
     # Set the chemistry as a numpy array
     chemistry = pd.concat([file[headers[i]] for i in instance], axis = 1)
     chemistry[pd.isna(chemistry)] = 0
 
     # Update headers
-    for idx in instance[::-1]: headers.remove(headers[idx])
+    for idx in instance[::-1]: 
+        headers.remove(headers[idx])
 
     # Store the chemistry
     data = {
-        'chemistry' : {
-            'props' : elements,
-            'data' : np.asarray(chemistry),
-            'units' : unit
+        "chemistry" : {
+            "props" : elements,
+            "data" : np.asarray(chemistry),
+            "units" : unit
         }
     }
 
@@ -252,12 +258,13 @@ def _get_acquisition_data_from_file(
     prop = []
     units = []
     for idx, p in enumerate(headers):
+        # Identify keywords in headers:
         union = set(re.sub(pattern, '',p).lower().split()) & set(geometric_keywords)
         if len(union) > 0:
             instance.append(idx)
             if '[' in p.split()[-1]: 
                 units.append(p.split()[-1])
-            else: units.append('1')
+            else: units.append('')
             prop.append(p)
 
     # Setting geometric properties
@@ -267,8 +274,8 @@ def _get_acquisition_data_from_file(
     # Update headers and property keywords
     for idx in instance[::-1]: headers.remove(headers[idx])
     for p, u in zip(prop, units): 
-        prop[prop.index(p)] = p.replace(f" {u}", "")
-        
+        if u != "":
+            prop[prop.index(p)] = p.replace(f" {u}", "")
         
     # Store as dictionary instead?
     #geometry = _lists_to_dict(prop, [np.asarray(file[geom]) for geom in prop])
@@ -366,10 +373,210 @@ def _lists_to_dict(
     """
     
     if len(keys) != len(values):
-        raise exceptions.ShapeError(f"Invalid argument shapes: {len(keys)} and {len(values)}")
+        raise exceptions.ShapeError(
+            f"Invalid argument shapes: {len(keys)} and {len(values)}"
+        )
 
     dictionary = {}
     
     for key, val in zip(keys, values): dictionary[key] = val
 
     return dictionary
+
+def file_writer(
+    filename : str | Path,
+    signal
+) -> None:
+    """Write results from particle analysis to Jeol's
+    text file.
+
+    Parameters
+    ----------
+    filename
+        Full path and name
+    signal
+        Signal instance with chemistry information
+    """
+    
+    filename = str(filename)
+    ext = os.path.splitext(filename)[-1].replace(".","").lower()
+    if ext == "": ext = "csv"
+    elif ext != "csv":
+        IOError(f"File extension {ext} is not supported.")
+        
+    filename = os.path.splitext(filename)[0] + "." + ext
+    
+    # Get metadata
+    md = signal._metadata.copy()
+
+    # Particle classes
+    unique_pclasses = list(
+        np.unique(signal.particle_classes)
+    )
+    # Number per class
+    class_stats = [np.sum(signal.particle_classes == pclass)
+                   for pclass in unique_pclasses]
+    tot_particles = len(signal.particle_classes)
+
+    # Define data frame and insert metadata keywords
+    colA = pd.DataFrame(
+        {
+            "Project name" : [
+                "Acquisition date",
+                "",
+                "Stub name",
+                "Analysis reservation area [mm²]",
+                "Analysis reservation views",
+                "Analyzed area [mm²]",
+                "Analyzed views",
+                "Acquisition time",
+                "Particles:",
+                "Summary",
+            ]
+        }
+    )
+
+    # Append particle classes
+    for pclass in unique_pclasses: 
+        colA.loc[len(colA), 'Project name'] = pclass
+
+    # Append more metadata keywords
+    kwrds = [
+        "", "Stub name", "ViewsMagnification", "X size [mm]",
+        "Y size [mm]", "Analysis reservation area [mm²]",
+        "Analysis reservation views", "Analyzed area [mm²]",
+        "Analyzed views", "Acquisition time", "Particles:",
+        "Summary"
+    ]
+
+    # Column B
+    colB = pd.DataFrame(
+        {md.get_item("General.title") : 
+            [md.get_item("Original_metadata.Acquisition date"),
+             "", "All stubs",
+             md.get_item("Original_metadata.Analysis reservation area [mm²]"),
+             md.get_item("Original_metadata.Analysis reservation views"),
+             md.get_item("Original_metadata.Analyzed area [mm²]"),
+             md.get_item("Original_metadata.Analyzed views"),
+             md.get_item("Original_metadata.Acquisition time"),
+             "", tot_particles, 
+            ]
+        }
+    )
+
+    # Insert general/overview class information
+    for num_cl in class_stats: 
+        colB.loc[len(colB), md.get_item("General.title")] = num_cl
+    colB.loc[len(colB), md.get_item("General.title")] = ""
+
+    # Insert stub info:
+    stubs = md.get_item("Acquisition_instrument").keys()
+    for stub in stubs:
+        if "Stub" not in stub:
+            stubs.remove(stub)
+
+    stub_kwds = [
+        "magnification", "X_size[mm]", "Y_size[mm]",
+        "reservation_area", "reserved_views", "analysed_area",
+        "analysed_views", "acquisition_time"
+    ]
+    
+    # Iterate through "Stubs":
+    for stub in stubs:
+        
+        # Stub keywords: in column A:
+        for kwrd in kwrds: 
+            colA.loc[len(colA), 'Project name'] = kwrd
+
+        warnings.warn("Iterate through classes per stub?: UNFINISHED", 
+                      UserWarning)
+        for pcl in unique_pclasses: 
+            colA.loc[len(colA), 'Project name'] = pcl
+        
+        stubmd = md.Acquisition_instrument.get_item(stub)
+        
+        # Metadata column B:
+        colB.loc[len(colB), md.get_item("General.title")] = stub
+        for kw in stub_kwds:
+            colB.loc[
+                len(colB), 
+                md.get_item("General.title")
+                ] = stubmd.get_item(kw)
+        colB.loc[len(colB), md.get_item("General.title")] = ""
+        
+        warnings.warn("Total number of particles per stub: UNFINISHED",
+                     UserWarning)
+        colB.loc[len(colB), md.get_item("General.title")] = tot_particles
+        
+        for numclass in class_stats:
+            colB.loc[
+                len(colB), 
+                md.get_item("General.title")
+                ] = numclass
+
+    # Concatenate dataframes
+    dfs = pd.concat(
+        [
+            colA, 
+            colB, 
+            pd.DataFrame({"" : []}), # Empty row 
+        ], 
+        axis = 1
+    )
+
+    # Concate additional data if they exists:
+    add = md.get_item("Additional_data")
+    if add is not None:
+        kwds = add.get_item("keywords")
+        for index, kw in enumerate(kwds):
+            
+            if "X-axis" in kw: # Append classes first
+                dfs = pd.concat(
+                    [dfs, pd.DataFrame({"Class name" : signal.particle_classes})],
+                    axis = 1
+                )
+            else:
+                dfs = pd.concat(
+                    [dfs, pd.DataFrame({kw : add.get_item("data")[
+                        :,index]})],
+                    axis = 1
+                )
+    else:
+        dfs = pd.concat(
+            [dfs, pd.DataFrame({"Class name" : signal.particle_classes})],
+            axis = 1
+        )
+        
+
+    # Concate Geometric data
+    if hasattr(signal, "Geometry"):
+        props = signal.Geometry.metadata.Signal.props
+        data = signal.Geometry.data
+        units = signal.Geometry.metadata.Signal.units
+        for index, prop in enumerate(props):
+            dfs = pd.concat(
+            [dfs, pd.DataFrame({
+                prop + " " + units[index]:data[:,index]
+            })],
+            axis = 1
+                )
+
+    # Concate Chemical data
+    if hasattr(signal, "Chemistry"):
+        props = signal.Chemistry.metadata.Signal.props
+        data = signal.Chemistry.data
+        units = signal.Chemistry.metadata.Signal.units
+        for index, prop in enumerate(props):
+            dfs = pd.concat(
+            [dfs, pd.DataFrame({
+                prop + " " + units:data[:,index]
+            })],
+            axis = 1
+        )
+
+    # Save data frame
+    dfs.to_csv(
+        path_or_buf = filename, 
+        sep = ",",
+        index=False
+    )

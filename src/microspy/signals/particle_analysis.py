@@ -23,8 +23,10 @@ import pandas as pd
 from tabulate import tabulate
 import warnings, os
 from pathlib import Path
+from tqdm import tqdm_notebook
 
-from src.microspy.signals._microspy_signals import (
+# Parent dir:
+from ..signals._microspy_signals import (
     MicroSpySignal2D, 
     MicroSpySignal2D_Parent,
     Images,
@@ -33,30 +35,41 @@ from src.microspy.signals._microspy_signals import (
     Images_signal_type
 )
 
+from src.microspy.io._io import _save
+
 from hyperspy.misc import utils
 
 class ParticleAnalysis:
     """Particle analysis class
 
-    This class keeps track of microspy's signal classes for 
+    A class keeping track of microspy signal classes like 
     particles' chemistry and geometric properties, particle
     classifications, etc.
 
+    The class has the ability to read and allocate Images
+    class (MicroSpySignal2D) attribute.
+
     Parameters
     ----------
+    signals
+        List of microspy 1D signals.
+    **kwargs
+        Read keywords:
+
+        "Unclassified_kw": Define the unclassified label.
 
     Structure
     ---------
     ParticleAnalysis
     ├── MicroSpySignal1D_Chemistry/
     ├── MicroSpySignal1D_Geometry/
-    └── MicrospySignal2D/
+    └── Images/
         ├── Signal2D
         └── Signal2D
 
     Examples
     --------
-    
+    ...
     """
     def __init__(self, signals, **kwargs) -> None:
 
@@ -66,14 +79,14 @@ class ParticleAnalysis:
                        MicroSpySignal1D_Chemistry)): 
             signals = [signals]
 
-        # Set attributes
+        # Set signals as attributes
         for signal in signals:
             # Set chemistry and geometry trackers:
             setattr(self, signal.metadata.Signal.signal_type, signal)
 
         # Set particle classification
         classes = signals[0].metadata.Sample.classes.copy()
-        self._original_classes(classes = classes)
+        self._set_original_classes(classes = classes)
         self._set_particle_classification(
             class_array = classes, 
             Unclassified_kw = kwargs.get(
@@ -83,6 +96,13 @@ class ParticleAnalysis:
         
         # Initialise metadata structure
         self._create_and_reorganise_metadata(signals)
+        
+        images = kwargs.get("images")
+        if images is not None:
+            if len(images) > 0:
+                print("Setting 'Images' class.")
+                self._set_Images(images)
+        
 
     # Nice printing of information 
     def __repr__(self):
@@ -168,10 +188,21 @@ class ParticleAnalysis:
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     def _create_and_reorganise_metadata(self, signals):
-        """Create metadata"""
+        """Create class metadata. 
+
+        Note!
+        The metadata is saved in the class, whilst the metadata 
+        in the attribute classes are removed.
+
+        The only metadata the attribute classes keep track of are 
+        Signal (this class will point to the attribute classes' 
+        Signal through Signals). Otherwise, they point to this class'
+        metadata
+        """
         from copy import deepcopy
-        
-        self._metadata = deepcopy(signals[0].metadata)
+
+        # Copy Chemistry metadata
+        self._metadata = deepcopy(signals[0]._metadata)
         md = self.metadata
 
         # Define Signals node
@@ -179,22 +210,23 @@ class ParticleAnalysis:
         md.add_node('Signals')
 
         # Store additional data as a new branch
-        if hasattr(md, 'Additional_data'):
-            self._additional_data = md.Additional_data
+        #if hasattr(md, 'Additional_data'):
+        #    self._additional_data = md.Additional_data
 
         # Iterate through the signals and let all have identical 
         # metadata except from the Signal branch
         for sig in signals:
 
-            # Get signal type
+            # Get signal type and delete it from the attribute
             sig_type = sig.metadata.Signal.signal_type
-            del sig.metadata.Signal.signal_type
-            
+            #del sig.metadata.Signal.signal_type
+
+            # Define Signals instead of Signal
             md.set_item(
                 f'Signals.{sig_type}', deepcopy(sig.metadata.Signal)
             )
 
-            # Set the signal metadata to reference the child class' 
+            # Set the attribute signal metadata to reference the class' 
             # metadata
             smd = sig.metadata
             if hasattr(smd, 'Additional_data'):
@@ -204,7 +236,7 @@ class ParticleAnalysis:
             #smd.Original_metadata = md.Original_metadata
             smd.Sample = md.Sample
 
-    def _original_classes(
+    def _set_original_classes(
         self,
         classes : np.ndarray
     ):
@@ -220,12 +252,77 @@ class ParticleAnalysis:
 
         self._is_classified = class_array != Unclassified_kw
         self._particle_classes = class_array.copy()
+
+        # Set phase_maps as 'not up-to date'
+        if hasattr(self, "Images"):
+            self.Images._updated_phase_maps = False
+            
+    def _set_Images(
+        self,
+        images : list
+    ):
+        """Set list of MicroSpySignal2D signals to Images
+        class.
+
+        images
+            list of Images classes
+        """
+        if images is None:
+            raise AttributeError("None argiment is not allowed.")
+
+        elif not isinstance(images, list):
+            raise AttributeError(f"Images argument {type(images[exp])} is not "
+                                  "recognised.")
+
+        else:
+            num_experiments = len(images)
+            # Iterate through multiple experiments:
+            for exp in range(num_experiments):
+                if num_experiments == 1: # Single experiment:
+                    self.Images = Images(images[0])
+                else: # Multiple experiments:
+                    if exp < 10: _exp = f"0{exp}"
+                    else: _exp = str(exp)
+                    setattr(self, f"Images{_exp}", Images(images[exp]))
         
         
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%% OPEN FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
 
+    def particles_logical_and(
+        self,
+        *arg
+    ) -> None:
+        """Identify particles matching provided argument conditions.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mask
+            Boolean array of met conditions
+        """
+        print("UNFINISHED")
+
+    def particles_logical_or(
+        self,
+        *arg
+    ) -> None:
+        """Identify particles matching provided argument conditions.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mask
+            Boolean array of met conditions
+        """
+        print("UNFINISHED")
+
+    @particle_classes.setter
     def reset_particle_classes(self):
         """Reset all particle classes to the original classification"""
         print(f"Setting the initial unique classes {np.unique(self._particle_classes)}"
@@ -324,17 +421,16 @@ class ParticleAnalysis:
         self._set_particle_classification(
             class_array = class_array, 
         )
+        
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #%%%%%%%%%%%%%%%%%%%5 IMAGES %%%%%%%%%%%%%%%%%%%%%%
+    #%%%%%%%%%%%%%%%%%%%% IMAGES %%%%%%%%%%%%%%%%%%%%%%
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+                
     def load_images(
         self, 
-        directory = None,
-        get_particle_images : bool = True,
-        centre_particle_images : bool = True,
-        set_dtype : bool = None
+        directory : str | Path | None = None,
+        **kwargs
     ):
         """Load the acquired images and the corresponding 
         particle images from particle analysis.
@@ -346,89 +442,62 @@ class ParticleAnalysis:
             If None, the function will use the stored
             directory in the original metadata and search
             for the images.
+
+        keyword arguments:
+            read_particle_images : bool = True,
+            centre_particle_images : bool = True,
+            set_dtype : bool = None
         """ 
-        
-        vendor = self.metadata.Acquisition_instrument.vendor
+        from ..io._images import _io
 
-        # Search for a potential directory
-        if directory == None:
-
-            from src.microspy.io._images._utils import (
-                _image_directory_searcher as directory_searcher
-            )
-
-            directory = self.metadata.General.original_filename 
-            
-            directory = os.path.split(directory)[0]
-            
-            print("Searching for particle images in "
-                f"{directory} sub-directories.")
-
-            directory_searcher = directory_searcher(vendor) 
-            
-            # A warning will be raised if multiple directories
-            # are found:
-            directory = Path(
-                directory_searcher(directory)
-            ).parent
-
-        directory = str(directory)
-        
-        """
-        readers ...
-        subdir_keyword ...
-        """
-
-        # Load subdirectory keyword unique for vendor (if any) 
-        if vendor.lower() == 'jeol':
-            from src.microspy.io._images.plugins.JEOL._api import (
-                subdir_keyword
-            )
-            from src.microspy.io._images import _io
+        # Check if loading images is necessary
+        _load_images : bool = False
+        if hasattr(self, "Images"):
+            _continue = input("'Images' class is already set. "
+                              f"Stored attributes: {print(self.Images)}. "
+                              "Procees? (y/[n])")
+            if _continue.lower() in ("y", "yes"):
+                _load_images = True
         else:
-            raise AttributeError(
-                f"Vendor {vendor} is not recognised"
-                "or not supported yet.")
-        
-        images = _io.load_images(
-            path = directory,
-            vendor = vendor,
-            get_particle_images = get_particle_images,
-            centre_particle_images = centre_particle_images,
-            set_dtype = set_dtype
-        )
+            _load_images = True
 
-        num_experiments = len(images)
-
-        # Multiple experiments:
-        for exp in range(num_experiments):
-            # Set signals and image types:
-            IMAGES = []
-            for im, imtype in zip(
-                images[exp],
-                Images_signal_type.keys()):
-
-                sig_type = Images_signal_type.get(imtype)
-
-                if sig_type == list(Images_signal_type.values())[1]:
-                    im = MicroSpySignal2D_Parent(im)
-                else:
-                    im = MicroSpySignal2D(im)
+        if _load_images:
+            # Search for a potential directory matching vendor solution:
+            if directory == None:
+                from src.microspy.io._images._utils import (
+                    _image_directory_searcher as directory_searcher
+                )
     
-                im.metadata.Signal.signal_type = imtype
-                im.metadata.General.title = sig_type
+                print("Searching for images according to vendor solution.")
+                vendor = self.metadata.get_item("Acquisition_instrument.vendor")
+                #kwargs["vendor"] = vendor
     
-                IMAGES.append(im)
-            
-            if num_experiments == 1:
-                # If single experiment:
-                self.Images = Images(IMAGES)
-            else:
-                # If multiple experiments:
-                if exp < 10: _exp = f"0{exp}"
-                else: _exp = str(exp)
-                setattr(self, f"Images{_exp}", Images(IMAGES))
-
+                if vendor == "": 
+                    raise AttributeError("No vendor information is accessible. "
+                                         "A directory must be provided.")
+                    
+                directory = self.metadata.get_item("General.original_filename") 
+                directory = os.path.split(directory)[0]
+                
+                print(f"Searching for particle images within \n<{directory}> "
+                       "sub-directories.")
+    
+                directory_searcher = directory_searcher(vendor) 
+    
+                directory = Path(
+                    directory_searcher(directory)
+                ).parent
+    
+            directory = str(directory)
+    
+            # Loading and setting arrays as Images classes
+            images = _io.load_images(
+                path = directory,
+                **kwargs
+            )
+    
+            self._set_Images(images)
+    
     def calibrate_navigation(
         self,
         scale : int | float,
@@ -503,7 +572,7 @@ class ParticleAnalysis:
         self,
         vendor : str = "",
         label_particles : bool = True,
-        matrix_label : int = -1
+        matrix_label : int = -1,
         **kwargs
     ):
         """Map particles' positions onto the Parent signal.
@@ -513,38 +582,265 @@ class ParticleAnalysis:
         Parameters
         ----------
         """
+        map_regions = False
+        
         if not hasattr(self, "Images"):
             raise AttributeError("The signal doesn't keep track of "
                                  "any images. See *.load_images()")
-        
-        if not vendor:
-            vendor = self.metadata.Acquisition_instrument.vendor
 
-        if vendor.lower() in ["jeol"]:
-            # Get acquisition order
-            namesId = self.metadata.Additional_data.keywords.index("Label name")
-            label_names = self.metadata.Additional_data.data[:,namesId]
-            stringLength = len(max(label_names, key=len))
-            charSplit = np.char.split(
-                label_names.astype(f"U{stringLength}"), 
-                sep="-"
+        map_kw = list(Images_signal_type.keys())[3]
+        
+        if hasattr(
+            self.Images, 
+            map_kw
+        ):
+            ans = input("Particle regions seems to have been "
+                                "mapped already.\n Proceed? (y/[n])")
+            map_regions = True if ans.lower() in ("y", "yes") else False
+        else: map_regions = True
+
+        if map_regions:
+            if not vendor:
+                vendor = self.metadata.get_item(
+                    "Acquisition_instrument.vendor"
+                )
+            
+            # The following can be moved to e.g. _misc
+            if vendor.lower() in ["jeol"]:
+                
+                # Get acquisition order
+                kwargs["acquisition_order"] = self.metadata.get_item(
+                    "Sample.acquisition_order"
+                )
+                if kwargs["acquisition_order"] is None:
+                
+                    kwds = self.metadata.get_item(
+                        "Additional_data.keywords"
+                    )
+                    if kwds is not None:
+                        namesId = kwds.index("Label name")
+                        label_names = self.metadata.get_item(
+                            "Additional_data"
+                        ).data[:,namesId]
+                        stringLength = len(max(label_names, key=len))
+                        charSplit = np.char.split(
+                            label_names.astype(f"U{stringLength}"), 
+                            sep="-"
+                        )
+            
+                        # Vendor starting index = 1
+                        kwargs["acquisition_order"] = np.array(
+                            [parts[1] for parts in charSplit],
+                            dtype = int
+                        ) - 1 
+            
+                        self._metadata.set_item(
+                            "Sample.acquisition_order",
+                            kwargs.get("acquisition_order")
+                        )
+                
+            self.Images.map_ChildSig_onto_ParentSig(
+                vendor = vendor,
+                labelling = label_particles,
+                matrix_label = matrix_label,
+                **kwargs
             )
 
-            # Vendor starting index = 1
-            kwargs["acquisition_order"] = np.array(
-                [parts[1] for parts in charSplit],
-                dtype = int
-            ) - 1 
-            
+    def plot(
+        self,
+        colours : list | dict | tuple | None = None,
+        bkgr_colour : tuple | list | str = (1.,1.,1.),
+        **kwargs
+    ):
+        """Plot a phase map of the classified particles.
         
-        self.Images.map_ChildSig_onto_ParentSig(
-            vendor = vendor,
-            labelling = label_particles,
-            matrix_label = matrix_label,
+        Parameters
+        ----------
+        colours
+            list or dict of colours.
+        """
+
+        if not hasattr(self, "Images"):
+            raise AttributeError("Object has no class 'Images'. "
+                                "See *.load_images().")
+        elif not hasattr(self.Images, "ChildSig") and not hasattr(self.Images, "ParentSig"):
+            raise AttributeError("Object class 'Images' has no attributes "
+                                 "ParentSig and/or ChildSig. See *.load_images().")
+        elif not hasattr(self.Images, f"{list(Images_signal_type.keys())[3]}"):
+            raise AttributeError("Object class 'Images' has no attribute "
+                                 f"{list(Images_signal_type.keys())[3]}. "
+                                 "See *.map_particles().")
+        
+        unique_classes = np.unique(
+            self.particle_classes
+        )
+        num_classes = len(
+            unique_classes
+        ) + 1 # incl. matrix
+
+        if colours is None: # Get default colours
+            from src.microspy.draw._colouring import DEFAULT_COLORS as colours
+        
+        num_colours = len(colours)
+
+        if num_colours < num_classes - 1: # Generate unique rgb colours 
+            from src.microspy.draw._colouring import generate_unique_rgb_colors
+            colours = generate_unique_rgb_colors(num_classes)
+    
+        if isinstance(colours, dict):
+            _colours = [colours[pclass] for pclass in unique_classes]
+        else: _colours = colours
+        
+        # Set colours as rgb
+        from matplotlib.colors import to_rgb
+        colours_rgb = [to_rgb(c) for c in _colours][:num_classes-1]
+
+        if kwargs.get("background_label") is None:
+            __attr = getattr(self.Images, list(Images_signal_type.keys())[3])
+            bkgr_label = __attr.data.min()
+            print(
+                f"Reading minimum label ({bkgr_label}) as background label."
+            )
+        else:
+            bkgr_label = kwargs.get("background_label")
+
+        # "Update phase maps"
+        if not self.Images.is_phase_maps_updated:
+            self.Images.set_phase_maps(
+                classes = self.particle_classes,
+                background_label = bkgr_label
+            )
+        
+        PM = self.Images.get_phaseMap(
+            bkgr_label = bkgr_label
+        )
+        
+        # Create a ListedColormap
+        from matplotlib.colors import ListedColormap
+        custom_cmap = ListedColormap(
+            np.insert(# Insert background colour
+                arr = colours_rgb,
+                obj = 0,
+                values = to_rgb(bkgr_colour), 
+                axis = 0
+            )
+        )
+        
+        from hyperspy.signals import Signal2D
+        # Plot phase map as a hyperspy Signal2D with
+        # custom colourmap
+        _sig = Signal2D(PM)
+
+        
+        # Text markers: classes
+        texts = np.insert(
+            arr = unique_classes,
+            obj = 0,
+            values = "Matrix"
+        )
+        # Can't figure out why the following fails...
+        """from hyperspy.drawing._markers.texts import Texts
+        # Label text start position
+        offset = [[85,10]]
+        for lower in range(len(texts)-1):   
+            offset.append(
+                [offset[-1][0],offset[-1][1]+5]
+                 )
+        
+        offsets = np.stack(offset)
+        m = Texts(
+            offsets=offsets,
+            texts=texts,
+            sizes=3,
+            facecolor="red"#colours_rgb,
+            )
+        
+        _sig.add_marker(m, permanent = True)"""
+        _sig.plot(
+            cmap = custom_cmap, 
+            vmin = float(bkgr_label)-0.5,
+            vmax = float(np.max(PM))+0.5,
             **kwargs
+        )
+        print("Class labels:")
+        for enum, cl in zip(
+            np.arange(bkgr_label, len(texts),1), 
+            texts
+        ):
+            print(f"{enum}: {cl}")
+
+    def save(
+        self,
+        filename : Path | str | None = None,
+        extension: str | None = "csv"
+    ) -> None:
+        """Write the signal to a file in the specified format.
+
+        If no extension is provided, the signal is written to ...
+
+        Parameters
+        ----------
+        filename
+            Path and filename. If None, the original filename
+            is used (path + filename)
+        extension
+            File extension that defines the file format. The 
+            options are:
+
+            * csv: Jeol's text format
+
+            Each format accepts different parameters.
+
+            If not given, the extension is determined by the
+            filename.
+
+        See also
+        --------
+        microspy.io.plugins
+        """
+        
+        if filename is not None:
+            fname, ext = os.path.splitext(str(filename))
+        else:
+            md = self.metadata.get_item("General")
+            if md.has_item("original_filename"):
+                fname = md.get_item("original_filename")
+                ext = os.path.splitext(fname)[-1].replace(".","")
+                if ext == "":
+                    ext = "." + extension
+            else:
+                ValueError("filename not given.")
+        
+        _save(
+            filename = fname + ext,
+            signal = self
         )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
 #####################################################
 ############## OLD SOLUTIONS ########################
 
@@ -1565,7 +1861,8 @@ class _ParticleAnalysis:
 
         if not hasattr(self.metadata.Particles, 'matrix_composition'): raise ValueError("The object's matrix composition is not set yet. See *.set_matrix_composition()")
 
-        if len(self.metadata.Particles.matrix_composition) == 0: warnings.warn('The matrix composition is empty')
+        if len(self.metadata.Particles.matrix_composition) == 0: warnings.warn(
+            'The matrix composition is empty', UserWarning)
 
         utils.print_particles_property(np.expand_dims(self.metadata.Particles.matrix_composition, axis = 1),
                                        header = self.metadata.Particles.matrix_elements,
@@ -1730,7 +2027,11 @@ class _ParticleAnalysis:
         
         if return_fig: return fig
             
-    def plot(self, colours = None, background_colour = 'whitesmoke'):
+    def plot(
+        self, 
+        colours = None, 
+        background_colour = 'whitesmoke'
+    ):
         """Plot the phase maps stored in Images class
         
         Parameters
@@ -3244,6 +3545,10 @@ class _ParticleAnalysis:
             
             # Allocate corr. classification name 
             self.Particles.classes[particle_arr] = "Unclassified"
+
+            if hasattr(self.Images):
+                print("Resetting phase maps.")
+                self.Images._phase_maps = {}
             
         else: print(f"Provided particle array of shape {np.shape(particle_arr)} do not match the total number of particles")
             

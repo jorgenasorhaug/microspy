@@ -1,0 +1,9 @@
+name: JEOL
+description: >
+  Read/write support for microscopy data from particle analysis
+  stored in hspy file.
+file_extensions: ["hspy"] # Folder structure
+default_extension: 0
+writes: [[2, 2], [2, 1], [2, 0]]
+manufacturer: Jeol
+footprints: []

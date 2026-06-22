@@ -18,6 +18,7 @@
 # 
 
 import os
+from numpy import dtype
 
 def get_subdirectories(path : str):
     """
@@ -109,3 +110,11 @@ def _identify_filenames_of_interest(
         if keyword in name: get_names.append(name)
     
     return get_names
+
+def _dtype_exists(data_type):
+    """Check if data type exists"""
+    try:
+        data_type = dtype(data_type)
+        return True
+    except TypeError:
+        return False

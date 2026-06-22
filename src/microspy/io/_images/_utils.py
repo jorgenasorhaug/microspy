@@ -49,7 +49,7 @@ def _image_directory_searcher(
     """
 
     if vendor.lower() == "jeol":
-        from .plugins.JEOL._utils import (
+        from .plugins.jeol_subdirs._utils import (
             search_for_image_directory as reader
         )
 

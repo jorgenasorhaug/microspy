@@ -227,9 +227,9 @@ def _find_crop_rectangles(
     for idx, crop in tqdm_notebook(
         zip(labels, cropped_images),
         total = len(labels),
-        disable = ~progressbar
+        disable = not progressbar
     ): 
-        
+
         result = match_template(original_image, crop)
         
         ij = np.unravel_index(np.argmax(result), result.shape)
@@ -295,7 +295,7 @@ def _get_crop_rectangles(
             raise ValueError(f"The number of labels {len(use_labels)}"
                             "is not matching the number of cropped "
                             f"images ({len(cropped_images)}).")
-        
+    
     results = _find_crop_rectangles(
         original_image, 
         cropped_images,
@@ -507,22 +507,30 @@ def _map_particle_regions(
             background_label = background_label
         )
         
-        #print("initial:", np.unique(label_maps[index]))
-        #print("Previous:", np.unique(label_maps[prev_index]))
         # increment labels
         if index != prev_index:
             label_maps[index][
                 label_maps[index] > background_label
                 ] += (incrementor + np.max(label_maps[prev_index]))
             prev_index = index    
-        #print("Final:", np.unique(label_maps[index]))
+        
     return label_maps
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
     
-
-
-
 
 
 

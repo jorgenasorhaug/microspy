@@ -17,52 +17,69 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-import warnings
+import warnings, yaml, importlib
+
+import os
+from pathlib import Path
 
 from src.microspy.io._utils import (
     _identify_subdirectories_of_interest
 )
 from src.microspy.signals._microspy_signals import (
-        MicroSpySignal2D,
-        MicroSpySignal2D_Parent
-    )
+    MicroSpySignal2D,
+    MicroSpySignal2D_Parent,
+    Images
+)
 
 from src.microspy._misc import exceptions
 
+PLUGINS : list = []
+WRITE_EXTENSIONS : list = []
+
+print("Change 'from_parts' to 6? (exclude src.)")
+from_parts = 7
+
+# Look for yaml files and append extensions and writers:
+specification_paths = list(Path(__file__).parent.rglob("specification.yaml"))
+for path in specification_paths:
+    with open(path) as file:
+        # specification as dictionary
+        spec = yaml.safe_load(file)
+        # append directories
+        spec["api"] = ".".join(path.parts[-from_parts:-1]) 
+        PLUGINS.append(spec)
+        if spec["writes"]:
+            for ext in spec["file_extensions"]:
+                WRITE_EXTENSIONS.append(ext)
+
 def load_images(
-    path : str,
-    vendor : str,
-    get_particle_images : bool = True,
-    centre_particle_images : bool = True,
-    set_dtype : bool = None
+    path : str | Path,
+    **kwargs
 ) -> list:
     """Load the stitched overview image, the individual 
     view images, and the particle images acquired during 
     particle analysis.
-
-    "CURRENTLY ONLY SUPPORTING JEOL'S SOLUTION"
 
     Parameters
     ----------
     path 
         Path to stitched overview image and the folder 
         structure from pa
-    vendor
-        Vendor to correctly read the images.
-        Currently only working for jeol
-    read_order
-        A list of strings with particle labels
+    #vendor
+    #    Vendor to correctly read the images.
+    #    Currently only working for jeol
     get_individual_particle_images 
         Whether to read the individual particle images. 
         True by default
 
     Returns
     -------
-    out 
-        list of the following images:
+    images 
+        list of experiments/Images classes with the following
+        ndarrays:
+        
         patched_im
             np.ndarray representing the patched image
         view_images
@@ -72,117 +89,82 @@ def load_images(
             np.ndarray representing the individual 
             particle images
     """
-    from pathlib import Path
+    from src.microspy.signals._microspy_signals import (
+        Images_signal_type
+    )
+
+    fname = Path(path)
+    if fname.is_file():
+        folder, filename = os.path.splitext(path)
+    elif fname.is_dir():
+        # Presumably path to a folder structure
+        folder = path
+        filename = ""
+
+    filename = folder + filename
     
-    folder = str(path)
+    # Identify reader for file extension
+    extension = os.path.splitext(filename)[-1].replace('.','')
+    readers = []
+    for plugin in PLUGINS:
+        if extension.lower() in plugin["file_extensions"]:
+            readers.append(plugin)
 
-    warnings.warn("Currently only supporting Jeol's version")
-    vendor = 'jeol'
+    reader = None
+    if len(readers) == 1:
+        reader = readers[0]
+    else:
+        raise IOError(f"Could not read {filename!r}. If the file "
+                      "format is supported, please report this error")
 
-    """
-    vendors ...
-    readers ...
-    """
-
-    # Check if image data type is to be changed
-    # after reading the images.
+    set_dtype = kwargs.get("set_dtype")
     if set_dtype is not None:
-
-        if set_dtype not in numpy_image_datatypes: 
-
+        from .. import _utils
+        if not _utils._dtype_exists(set_dtype):
             print(f'Data type {set_dtype} was not recognised.' 
                   'Reading images as default datatype.')
-            
             set_dtype = None 
 
-    # Identify the vendor and import corr. image readers
-    if vendor.lower() == 'jeol':
-        
-        from src.microspy.io._utils import (
-            _identify_subdirectories_of_interest as get_subdirectories
-        )
-        from src.microspy.io._images.plugins.JEOL._api import (
-            subdir_keyword, image_keyword, image_extension,
-            _load_stub_image as stub_loader,
-            _load_view_images as view_loader, 
-        )
-
-    # Check if correct path is employed, i.e. to the 
-    # directory with the Sutb_ folders. E.g. ['Sutb01',
-    # Sutb02'] from jeol, i.e. dir = folder / subdirs[i]
+    # Get file reader
+    try: 
+        file_reader = importlib.import_module(reader["api"]).file_reader
+        print("Delete this try-except in the module")
     
-    folder, subdirs = get_subdirectories(
-        path = folder,
-        keyword = subdir_keyword
-    ) # This list contains only the next subdir(s).
-
-    out = []
+    except AttributeError:
+        file_reader = importlib.import_module(reader["api"] + "._api").file_reader
     
-    # Load images | iterate through diff. acquisitions
-    if len(subdirs) > 0:
+    images = file_reader(
+        filename,
+        **kwargs
+    ) 
+    
+    # Iterate through experiments and assign signal type
+    for exp in range(len(images)):
         
-        # Iterate through the different sub-directories 
-        # (e.g. Sutb1, Sutb2, etc.)
-        for _subdir in subdirs:
+        # Set images subclasses
+        for (enum, im), imtype in zip(
+            enumerate(images[exp]),
+            Images_signal_type.keys()):
+
+            sig_type = Images_signal_type.get(imtype)
             
-            subdir = Path(os.path.join(folder, _subdir))
-            
-            patched_im = stub_loader(
-                path = subdir,
-                image_extension = image_extension[0],
-                set_dtype = set_dtype
-            )
+            if sig_type == list(Images_signal_type.values())[1]:
+                im = MicroSpySignal2D_Parent(im)
+            else:
+                # Try to set the signal. If it's empty, an exception
+                # will occur.
+                try: im = MicroSpySignal2D(im)
+                except ValueError: 
+                    # Jump to the next iteration
+                    continue
+            im.metadata.Signal.signal_type = imtype
+            im.metadata.General.title = sig_type
 
-            view_images = view_loader(
-                path = subdir,
-                image_extension = image_extension[1],
-                set_dtype = set_dtype
-            )
+            images[exp][enum] = im
+    
+    return images
         
-            if get_particle_images:
-                
-                from src.microspy.io._images.plugins.JEOL._api import (
-                    _load_particle_images as particles_image_loader
-                )
-
-                _, folders = _identify_subdirectories_of_interest(
-                    path = subdir,
-                    keyword = image_keyword
-                )
-            
-                folders = np.sort(folders)
-
-                particle_images = particles_image_loader(
-                    path = subdir,
-                    folders = folders,
-                    image_extension = image_extension[2],
-                    set_dtype = set_dtype,
-                    centre_particle_images = centre_particle_images
-                )
-                
-            else: particle_images = []
-
-            out.append([patched_im, 
-                        view_images, 
-                        particle_images]
-                      )
-
-        return out
-
-    else: 
-        
-        warnings.warn(f"Coudn't find directory: {folder}") 
-
-        return [[], [], []]
-        
-def save_images(
-    path : str = None
-):
-    """
-    """
-    print('UNFINISHED')
-
-def _arrays2signals(#_1dArray2list(
+def _arrays2signals(
     array : np.ndarray | list
 ) -> list:
     """Assign an image subclass to the input array(s).
@@ -201,26 +183,22 @@ def _arrays2signals(#_1dArray2list(
     input_type = type(array)
 
     if isinstance(input_type, np.ndarray):
-
         array = [array]
 
     out = []
-
     for arr in array:
-
         out.append(
             _assign_image_subclass(
                 array = arr
-                )
-            )
-
+            ))
+    
     return out
 
 def _assign_image_subclass(
     array : np.ndarray
-) -> MicroSpySignal2D | MicroSpySignal2D_Parent:
-    """Assign image subclass to a list of 
-    ndarrays
+) -> MicroSpySignal2D | None:
+    """Assign image subclass to a list of ndarrays. If subclass
+    is already assigned, the argument is returned.
 
     Parameters
     ----------
@@ -230,34 +208,73 @@ def _assign_image_subclass(
     Returns
     -------
     signal
-        list of image subclasses
+        image subclass or None if empty.
     """
 
     # Return signal if it's already been set
-    if isinstance(array, MicroSpySignal2D | 
-                  MicroSpySignal2D_Parent
-                 ):
-
+    if isinstance(array, MicroSpySignal2D):
         return array
-
+        
     dim = np.ndim(array)
-    
-    arr = MicroSpySignal2D(array)
+
+    if dim == 1:
+        return None
+    else:
+        arr = MicroSpySignal2D(array)
 
     if dim == 2:
-        
         arr.metadata.Signal.signal_type = f"2D_Image_shape{np.shape(array)}".replace(
             ", ","x"
         ).replace('(','').replace(')','')
 
     elif dim > 2:
-
         arr.metadata.Signal.signal_type = f"ND_Image_shape{np.shape(array)}".replace(
             ", ","x"
         ).replace('(','').replace(')','')
         
     return arr
 
-        
+def _save(
+    signal,
+    filename : str | Path | None = None,
+) -> None:
+    """Save Images class.
 
-    
+    Parameters
+    ----------
+    signal
+        MicroSpy signal to save
+    filename
+        Complete path and filename of file.
+    """
+
+    fname, ext = os.path.splitext(str(filename))
+    if ext == "":
+        ext = ".hdf5"
+
+    # Identify reader for file extension
+    extension = ext.replace(".","")
+    writers = []
+    for plugin in PLUGINS:
+        if extension.lower() in plugin["file_extensions"]:
+            writers.append(plugin)
+
+    writer = None
+    if len(writers) == 1:
+        writer = writers[0]
+    else:
+        raise IOError(f"Could not read {filename!r}. If the file "
+                      "format is supported, please report this error")
+
+    # Get file writer
+    try: 
+        file_writer = importlib.import_module(writer["api"]).file_writer
+        print("Delete this try-except in the module")
+    except AttributeError:
+        file_writer = importlib.import_module(writer["api"] + "._api").file_writer
+
+    # Write file
+    file_writer(
+        signal = signal,
+        filename = fname + ext
+    )

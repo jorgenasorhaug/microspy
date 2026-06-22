@@ -18,13 +18,14 @@
 #
 
 import numpy as np
-import warnings
+import warnings, os
+from pathlib import Path
 
 from hyperspy.signals import Signal1D, Signal2D
 from hyperspy.misc import utils
 from hyperspy.utils.markers import Texts
 
-from src.microspy._misc import exceptions 
+from .._misc import exceptions 
 from .utils import _image_utils
 
 from src.microspy._misc.material import (
@@ -46,6 +47,14 @@ ALLOWED_CHEMICAL_UNITS = [
     'Wt %', 'wt %', 'Wt%', 'wt%', 'Wt. %', 'wt. %', 'Wt.%', 'wt.%', 
     '[Wt %]', '[wt %]', '[Wt%]', '[wt%]', '[Wt. %]', '[wt. %]', '[Wt.%]', '[wt.%]']
 ]
+
+# signal_type : title
+Images_signal_type = {
+    "CompositeSig" : "Overview_image", #Overview/stitched im.
+    "ParentSig" : "Acquisition", # Individual images
+    "ChildSig" : "Cropped_ROIs", # Cropped child images
+    "ChildMap" : "Particle_map", # Map of child images
+}    
 
 ####################################################
 ################# PARENT CLASSES ###################
@@ -171,7 +180,7 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         elements = kwargs.get('props')
-        self.metadata.Signal.signal_type = 'Chemistry'
+        self.metadata.Signal.set_item("signal_type", value = 'Chemistry')
         self.metadata.Signal.props = elements
 
         self._remove_nans() # Remove nan values
@@ -372,7 +381,9 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
                 (kwarg_unit in ALLOWED_CHEMICAL_UNITS[1]) : 1
             }[False]
 
-            if _unit != _: raise AttributeError(f"The keyword {kwarg_unit} is the same as the existing unit: {self.unit}. See *.set_unit()")
+            if _unit != _: 
+                raise AttributeError(f"The keyword {kwarg_unit} is the "
+                     f"same as the existing unit: {self.unit}. See *.set_unit()")
 
             new_unit[_] = kwarg_unit
 
@@ -415,7 +426,7 @@ class MicroSpySignal1D_Geometry(MicroSpySignal1D):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.metadata.Signal.signal_type = 'Geometry'
+        self.metadata.Signal.set_item("signal_type", value = 'Geometry')
         self.metadata.Signal.props = kwargs.get('props')
 
 
@@ -427,13 +438,6 @@ class MicroSpySignal1D_Geometry(MicroSpySignal1D):
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #%%%%%%%%%%%%%%%%%%%% IMAGE CLASSES %%%%%%%%%%%%%%%%%%%%%%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-Images_signal_type = {
-    "CompositeSig" : "Overview_image", #Overview/stitched im.
-    "ParentSig" : "Acquisition", # Individual images
-    "ChildSig" : "Cropped_ROIs"
-}      
-
 
 class MicroSpySignal2D(Signal2D):
     """Class for tracking particle images using microspy, 
@@ -593,19 +597,28 @@ class MicroSpySignal2D_Parent(MicroSpySignal2D):
 class Images:
     """A class to keep track of and manipulate acquired
     SEM images. The images are hyperspy 2D signals.
+
+    Parameters
+    ----------
+    images
+        List of numpy arrays or a single numpy ndarray.
+
     """
     def __init__(self, images : list | np.ndarray) -> None:
         from src.microspy.io._images import _io
 
-        # Images to MicroSpySignal2D
+        # images to MicroSpySignal2D variants
+        
         images = _io._arrays2signals(images)
         sig_types = []
         
         for im in images:
-            sig_types.append(im.metadata.Signal.signal_type)
-            setattr(self, sig_types[-1], im)
+            if im is not None:
+                sig_types.append(im.metadata.Signal.signal_type)
+                setattr(self, sig_types[-1], im)
 
-        self.phase_maps = dict()
+        self._phase_maps = dict()
+        self._updated_phase_maps : bool = False
         self._create_metadata()
 
         for sig_type in sig_types:
@@ -649,6 +662,173 @@ class Images:
         md.General.add_node("title")
         md.add_node("Signals")
         self._original_metadata = utils.DictionaryTreeBrowser()
+
+    @property
+    def metadata(self):
+        """The metadata of the signal."""
+        return self._metadata
+
+    @property
+    def phase_maps(self):
+        """The metadata of the signal."""
+        return self._phase_maps
+
+    @property
+    def is_phase_maps_updated(self):
+        """Check if phase maps are up to date"""
+        return self._updated_phase_maps
+
+    @property
+    def num_signals(self):
+        """Get the total number of image signals"""
+        num = 0
+        for attr, value in vars(self).items():
+            if isinstance(value, MicroSpySignal2D | MicroSpySignal2D_Parent):
+                num += 1
+        return num
+            
+    @property
+    def navigation_unit(self):
+        """Get calibration unit"""
+        if hasattr(self._metadata.Signals, "unit"):
+            return self._metadata.Signals.unit
+        else:
+            print("The signal hasn't been calibrated yet.")
+
+    @property
+    def navigation_scale(self):
+        """Get calibration unit"""
+        if hasattr(self._metadata.Signals, "scale"):
+            return self._metadata.Signals.scale
+        else:
+            print("The signal hasn't been calibrated yet.")
+
+    @property
+    def is_calibrated(self):
+        """Check if the signals are calibrated"""
+        if hasattr(self._metadata.Signals, "scale") and hasattr(self._metadata.Signals, "unit"):
+            return True
+        else: return False
+    
+    @property
+    def is_gridified(self):
+        """Check if the Parent signal is gridified
+        into a 4D grid or not. The function returns
+        True if the array shape is (Y,X,ky,kx) (numpy
+        convention) or higher.
+
+        Note:
+            If the signal is a series of images taken
+            along a row/column, the signal must be grid-
+            ified into a 4D signal to be correctly inter-
+            preted. 
+            Example: A column of images with shape (c,X,Y) 
+            is correctly shaped, hence interpreted, if the 
+            data is gridified into shape (c,1,X,Y).
+        """
+        if hasattr(self, "ParentSig"):
+            _gridified = True
+            # Iterate through all Parent signal types:
+            for attr, value in self.__dict__.items():
+                if isinstance(value, MicroSpySignal2D_Parent):
+                    _gridified *= self.__dict__[attr].is_gridified
+            return bool(_gridified)
+        else: 
+            raise AttributeError("The class has no parent signal.")
+
+    def get_phase_maps(self) -> dict:
+        """Return dictionary phase maps.
+
+        Returns
+        -------
+        phase_maps
+            Dictionary with ndarrays representing each class (key) 
+            positions
+        """
+        from copy import deepcopy
+        return deepcopy(self._phase_maps)
+
+    def get_phaseMap(
+        self,
+        bkgr_label : int | None = -1,
+    ) -> np.ndarray:
+        """Return an ndarray of labelled regions representing the phases.
+
+        Parameters
+        ----------
+        bkgr_label
+            Label of the bakcground
+
+        Returns
+        -------
+        PM
+            phase map as ndarray with labelled regions according to class.
+        """
+        
+        phase_maps = self.get_phase_maps()
+        
+        PM = np.full_like(
+            self.ParentSig.data,
+            fill_value = bkgr_label,
+            dtype = int
+        )
+
+        num_classes = len(phase_maps) + 1
+        
+        enumerator = np.arange(
+            bkgr_label + 1,
+            stop = num_classes - abs(bkgr_label),
+            step = 1
+        )
+        
+        for enum, vals in zip(enumerator, phase_maps.values()):
+            PM[vals] = enum
+
+        return PM
+
+    def _reset_phase_maps(self):
+        """Reset phase maps to an empty dictionary"""
+        if len(self._phase_maps) > 0:
+            print("Resetting phase maps.")
+            self._phase_maps = {}
+
+    def set_phase_maps(
+        self,
+        classes : list | np.ndarray | tuple,
+        background_label : int = -1,
+        **kwargs
+    ):
+        """Set phase maps (dictionary).
+
+        Parameters
+        ----------
+        classes
+            List or tuple of particle class names
+        label_maps
+            boolean ndarray of particle locations  
+        """
+        from src.microspy.draw import imaging
+
+        # Degridify to simplify the mapping
+        #if self.is_gridified:
+        #    grid_shape = self.ParentSig.data.shape[:-2]
+        #    self.degridify()
+
+        __attr = getattr(self, list(Images_signal_type.keys())[3])
+        
+        self._reset_phase_maps()
+        phase_maps = imaging.get_phase_maps_from_label_map(
+            classes = classes,
+            label_map = __attr.data,
+            background_label = background_label
+        ) 
+        # Set phase maps
+        self._phase_maps = phase_maps
+        self._updated_phase_maps = True
+        print("Phase maps updated.")
+        
+        # Re-gridify
+        #self.gridify(grid_shape)
         
     def calibrate_signals(
         self,
@@ -697,61 +877,11 @@ class Images:
                         unit = unit
                         )
             
-            
         if hasattr(self, "ChildSig"):
             self.ChildSig.set_scale(
                 scale = upsamplingChildSigFac * scale,
                 unit = unit
             )
-            
-    @property
-    def navigation_unit(self):
-        """Get calibration unit"""
-        if hasattr(self._metadata.Signals, "unit"):
-            return self._metadata.Signals.unit
-        else:
-            print("The signal hasn't been calibrated yet.")
-
-    @property
-    def navigation_scale(self):
-        """Get calibration unit"""
-        if hasattr(self._metadata.Signals, "scale"):
-            return self._metadata.Signals.scale
-        else:
-            print("The signal hasn't been calibrated yet.")
-
-    @property
-    def is_calibrated(self):
-        """Check if the signals are calibrated"""
-        if hasattr(self._metadata.Signals, "scale") and hasattr(self._metadata.Signals, "unit"):
-            return True
-        else: return False
-    
-    @property
-    def is_gridified(self):
-        """Check if the Parent signal is gridified
-        into a 4D grid or not. The function returns
-        True if the array shape is (Y,X,ky,kx) (numpy
-        convention) or higher.
-
-        Note:
-            If the signal is a series of images taken
-            along a row/column, the signal must be grid-
-            ified into a 4D signal to be correctly inter-
-            preted. 
-            Example: A column of images with shape (c,X,Y) 
-            is correctly shaped, hence interpreted, if the 
-            data is gridified into shape (c,1,X,Y).
-        """
-        if hasattr(self, "ParentSig"):
-            _gridified = True
-            # Iterate through all Parent signal types:
-            for attr, value in self.__dict__.items():
-                if isinstance(value, MicroSpySignal2D_Parent):
-                    _gridified *= self.__dict__[attr].is_gridified
-            return _gridified
-        else: 
-            raise AttributeError("The class has no parent signal.")
 
     def gridify_ParentSig(
         self,
@@ -792,6 +922,13 @@ class Images:
                 scale = self.navigation_scale,
                 unit = self.navigation_unit
             )
+
+        if len(self._phase_maps) > 0:
+            #print("Gridifying phase maps.")
+            self._gridify_phase_maps(
+                grid_shape = grid_shape,
+                flip_axis = flip_axis
+            )
         
     def degridify_ParentSig(
         self,
@@ -827,19 +964,9 @@ class Images:
                 unit = self.navigtaion_unit
             )
 
-    @property
-    def metadata(self):
-        """The metadata of the signal."""
-        return self._metadata
-
-    @property
-    def num_signals(self):
-        """Get the total number of image signals"""
-        num = 0
-        for attr, value in vars(self).items():
-            if isinstance(value, MicroSpySignal2D | MicroSpySignal2D_Parent):
-                num += 1
-        return num
+        if len(self._phase_maps) > 0:
+            #print("Degridifying phase maps.")
+            self._degridify_phase_maps()
 
     def setParentSig(
         self,
@@ -949,8 +1076,7 @@ class Images:
                                  "setChildSig().")
 
         """
-        extensions...
-        plugins...
+        vendor?
         """
 
         if vendor.lower() in ["jeol"]:
@@ -968,7 +1094,8 @@ class Images:
             parentOrder = kwargs.get("acquisition_order")
 
         if not isinstance(parentOrder, np.ndarray):
-            raise ValueError("NEED TO FIGURE OUT A WAY TO FIX THIS!")
+            raise ValueError("CAN ONE EXPECT ALL VENDORS TO PROVIDE IMAGE "
+                            "NUMBER INFORMATION?")
 
         # Depadded particle images
         childArr = self.ChildSig.data.copy()
@@ -986,10 +1113,110 @@ class Images:
             nested_progressbar = nested_progressbar
         )
 
-        print("Allocating MicroSpySignal2D_Parent 'Child_map' "
-              "to Images.")
-        self.Child_Map = MicroSpySignal2D_Parent(label_maps)
-        if self.is_gridified: self.Child_Map.gridify(to_grid)
-        self._metadata.Signals.Child_Map = "Mapped_ChildSig"
+        attribute_name = list(Images_signal_type.keys())[3]
+        sig_type = Images_signal_type[attribute_name]
+        print(f"Allocating MicroSpySignal2D_Parent '{attribute_name}' "
+              "to 'Images' attribute.")
+        
+        setattr(self, 
+                attribute_name, 
+                MicroSpySignal2D_Parent(label_maps)
+               )
+        __attr = getattr(self, attribute_name)
+        __attr.metadata.set_item(
+            "Signal.signal_type", 
+            attribute_name
+        )
+        __attr.metadata.set_item(
+            "General.title", 
+            sig_type
+        )
+        
+        if self.is_gridified: __attr.gridify(to_grid)
+        self._metadata.Signals.set_item(attribute_name, "Mapped_ROIs")
 
         if return_map: return label_maps
+
+    def _gridify_phase_maps(
+        self,
+        grid_shape : tuple,
+        flip_axis : int | list | None = 1
+    ):
+        """Gridify the phase maps.
+
+        grid_shape
+            2D grid shape.
+            Assuming the data shape is (X, W, H), the data 
+            will be reshaped into grid_shape + (W, H)
+        flip_axis 
+            Depending on the image acquisition order,
+            flip the images along specified axis/axes. 
+        """
+        if not self.is_gridified and len(self._phase_maps) > 0:
+            _phase_maps = self.get_phase_maps()
+            self._reset_phase_maps()
+            for key, val in _phase_maps.items():
+                _phase_maps[key] = _3Darray_2_4Darray(
+                    arr = val,
+                    to_shape = grid_shape,
+                    flip_axis = flip_axis
+                )
+            self._phase_maps = _phase_maps
+
+    def _degridify_phase_maps(self):
+        """Degridify the phase maps."""
+
+        if not self.is_gridified and len(self._phase_maps) > 0:
+            _phase_maps = self.get_phase_maps()
+            self._reset_phase_maps()
+            for key, val in _phase_maps.items():
+                _phase_maps[key] = _4Darray_2_3Darray(
+                    arr = val
+                )
+            self._phase_maps = _phase_maps
+
+    def save(
+        self,
+        filename : str | Path | None = None
+    ):
+        """Save Image classes as hyperspy files.
+
+        Parameters
+        ----------
+        filename
+            Full filename of file. If none is provided, 'Images' will be used.
+        """
+        print("MULTIPLE EXPERIMENTS NOT YET SUPPORTED.")
+        from src.microspy.io._images import _save
+        from os import path
+
+        if filename is not None:
+            fname = path.split(filename)[-1]
+            # Set default filename if None is provided
+            if not fname: 
+                filename += "Images"
+        else: filename = "Images"
+
+        _save(
+            self,
+            filename = filename
+        )
+        
+
+    def load(
+        filename : str | Path | None = None
+    ):
+        """Load Image classes from hyperspy file.
+
+        Parameters
+        ----------
+        filename
+            File name.
+        """
+        print("Multiple stubs not supported yet...")
+        print("Unfinished | Relocate ParticleAnalysis function")
+        from src.microspy.io._images import load_images
+
+        return load_images(
+            path = filename
+        )

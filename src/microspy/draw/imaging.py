@@ -19,8 +19,10 @@
 
 import numpy as np
 from copy import deepcopy
+from src.microspy._misc import exceptions
+import warnings
 
-def get_stitched_Parent_signal(
+def get_stitched_grid_signal(
     array : np.ndarray,
     grid_shape : tuple | list = None,
     horisontal_direction : str | None = None,
@@ -187,3 +189,88 @@ def _stitch_nd_to_2d(
         stitched[y:y+h, x:x+w, ...] = arr[idx]
 
     return stitched
+
+def get_phase_maps_from_label_map(
+    classes : list | tuple,
+    label_map : np.ndarray,
+    background_label : int | None = -1,
+    **kwargs
+) -> np.ndarray:
+    """Creates a map of phase labels according to unique classes
+
+    Parameters
+    ----------
+    classes
+        list of classes
+    label_map
+        Map of labels with as many unique labels as classes
+    background_label
+        Index of background label in label_map
+
+    Returns
+    -------
+    phase_map
+        Map of class labels
+
+    Note
+    ----
+    kwargs takes image_indices as argument
+        list, tuple or ndarray of where the labels are
+    """
+   
+    from tqdm import tqdm_notebook
+    print("Not (yet) supporting where indices are expected to "
+          "be found in array of images.")
+    
+    num_classes = len(classes)
+    
+    unique_classes = np.unique(classes)
+    unique_labels = np.unique(label_map)
+
+    if background_label is None:
+        background_label = -1
+    
+    if background_label not in unique_labels:
+        warnings.warn(f"Background label {background_label} not "
+                     "found in label_map.")
+    else:
+        unique_labels = np.delete(
+            arr = unique_labels,
+            obj = unique_labels == background_label
+        )
+    
+    if num_classes != len(unique_labels):
+        
+        raise exceptions.ShapeError(
+            f"Number of classes ({num_classes}) does "
+            "not match the number of unique labels "
+            f"({len(unique_labels)})"
+        )
+
+    else:
+        
+        phase_maps = dict()
+        
+        for cl in tqdm_notebook(
+            unique_classes,
+            total = len(unique_classes),
+            desc = "Mapping class positions",
+            position = 0
+        ):
+            
+            labels = unique_labels[classes == cl]
+            phase_maps[cl] = np.zeros_like(
+                label_map,
+                dtype = bool
+            )
+            
+            for label in tqdm_notebook(
+                labels,
+                total = len(labels),
+                desc = cl,
+                position = 0
+            ):
+
+                phase_maps[cl][label_map==label] = True
+
+    return phase_maps

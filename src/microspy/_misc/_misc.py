@@ -661,14 +661,36 @@ def get_greek_letter(letter : str):
 
         
 
-def check_array_compatibility_with_new_datatype(array, new_dtype):
-    """Check if array values will not be changed if a new data type (new_dtype) set set""" 
-    min_val = np.min(array)
-    max_val = np.max(array)
-    info_dtype = np.iinfo(new_dtype)
-    if min_val < info_dtype.min: return False
-    if max_val > info_dtype.max: return False
-    return True  
+#old function name: check_array_compatibility_with_new_datatype
+def values_change_after_dtype_change(
+    arr : np.ndarray,
+    new_dtype
+) -> bool:
+    """ Check if array values change after casting to a new dtype.
+
+    Parameters
+    ----------
+    arr
+        Input array
+    new_dtype
+        Target dtype (e.g., np.float32, np.int32)
+
+    Returns
+    -------
+    True if values change, otherwise False
+    """
+    original = np.array(arr)
+    
+    try:
+        converted = original.astype(new_dtype)
+    except Exception as e:
+        raise ValueError(f"Failed to convert dtype: {e}")
+    
+    # Compare: use allclose for float safety, exact comparison otherwise
+    if np.issubdtype(original.dtype, np.floating) or np.issubdtype(new_dtype, np.floating):
+        return not np.allclose(original, converted)
+    else:
+        return not np.array_equal(original, converted)
 
 def _get_table(data, label):
     """Structure data and labels to fit tabulate's functions
