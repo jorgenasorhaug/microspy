@@ -19,4 +19,4 @@
 
 from . import plugins
 
-__all__ = ["JEOLcsv"]
+__all__ = ["plugins"]

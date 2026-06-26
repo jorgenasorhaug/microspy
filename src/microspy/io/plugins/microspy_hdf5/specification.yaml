@@ -1,4 +1,4 @@
-name: microspy
+name: microspy_hdf5
 description: >
   Read/write support for microscopy data from particle analysis
   stored in an hspy file format.

@@ -17,6 +17,7 @@ from . import (
     io,
     signals,
     data,
+    draw,
 )
 
 from .io._io import load
@@ -29,5 +30,6 @@ __all__ = [
     "data",
     "io",
     "signals",
+    "draw",
     #"simulations",
 ]

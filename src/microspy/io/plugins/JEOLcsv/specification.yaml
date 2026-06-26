@@ -1,4 +1,4 @@
-name: JEOL
+name: JEOLcsv
 description: > 
     Read/write support for Jeol's dataframe
 file_extensions: ["csv"]
