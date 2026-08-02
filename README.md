@@ -14,6 +14,7 @@ The intention with this python package is to have an alternative analysis tool f
 >> conda create --name microspy
 >> conda activate microspy
 >> conda install git pip
+>> conda install numba -c conda-forge # volunteerly
 >> pip install git+https://github.com/jorgenasorhaug/microspy.git
 ```
 
