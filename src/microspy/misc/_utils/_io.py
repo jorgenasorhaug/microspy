@@ -22,6 +22,7 @@
 import numpy as np
 from tabulate import tabulate
 from pathlib import Path
+from ._utils import _path_exists
 
 def _save_tabulated_data_as_csv(
     table : np.ndarray,
@@ -30,21 +31,21 @@ def _save_tabulated_data_as_csv(
     filename : str = "tabulate.csv",
     tbfmt : str = "%.3f"
 ):
-    """Save tabulated data as a csv file.
+    """Save tabulated data to csv format.
 
     Parameters
     ----------
     table
-        Data to be printed. The data is expected to fit the 
-        shape (len(header), len(label))
+        Data to be printed. The data is expected to fit the shape 
+        (len(header), len(label)).
     header
-        List of headers : will be printed at the top of each column
+        List of headers : will be printed at the top of each column.
     path
         path to save the tabulated data. 
     filename
-        Name of file
+        Name of file.
     tbfmt
-        Table format for values
+        Table format for values.
     """
 
     if _path_exists(path):
@@ -79,19 +80,19 @@ def _save_tabulated_data_as_txt(
     path : str = '', 
     filename : str = 'tabulate.txt',
 ):
-    """Save the tabulated data as a txt file
+    """Save the tabulated data to txt format.
     
     Parameters
     ----------
     table
-        Data to be printed. The data is expected to fit the 
-        shape (len(header), len(label))
+        Data to be printed. The data is expected to fit the shape 
+        (len(header), len(label)).
     header
-        List of headers : will be printed at the top of each column
+        List of headers : will be printed at the top of each column.
     path
         path to save the tabulated data. 
     filename
-        Name of file
+        Name of file.
     """
 
     if _path_exists(path):
@@ -111,33 +112,3 @@ def _save_tabulated_data_as_txt(
                     )
                 )
 
-def _path_exists(
-    path
-):
-    """Check if path exists. If not, the function
-    will ask the user whether to create it.
-
-    Parameters
-    ----------
-    path
-        directory
-    """
-    from pathlib import Path
-
-    folder = Path(path)
-
-    if not folder.exists():
-        
-        ans = input(f"Couldn't find folder {path}.\nCreate folder? (y/[n])")
-
-        if ans.upper() == 'Y' or ans == '':
-
-            print(f"Creating folder {path}")
-            
-            os.mkdir(path)
-
-            return True
-
-        else: return False
-
-    else: return True

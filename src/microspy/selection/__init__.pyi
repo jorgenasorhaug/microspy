@@ -13,24 +13,12 @@
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 
-from .io._io import load
-from . import (
-    signals,
-    data,
-    draw,
-    misc,
-    selection,
+from ._logical import (
+    logical_and,
+    logical_or,
 )
 
-# Define the public API of the module
 __all__ = [
-    # Functions
-    "load",
-
-    # Modules
-    "signals",
-    "data",
-    "draw",
-    "misc",
-    "selection",
+    "logical_and",
+    "logical_or",
 ]

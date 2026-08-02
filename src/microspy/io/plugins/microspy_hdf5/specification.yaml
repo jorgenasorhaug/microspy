@@ -4,6 +4,6 @@ description: >
   stored in an hspy file format.
 file_extensions: ['hdf5']
 default_extension: 0
-writes: [[2, 2], [2, 1], [2, 0]]
+writes: True
 manufacturer: microspy
 footprints: []

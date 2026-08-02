@@ -27,9 +27,9 @@ from h5py import File, Group
 
 from hyperspy.signals import Signal2D
 
-from src.microspy.signals.particle_analysis import ParticleAnalysis
-from src.microspy.signals._microspy_signals import (
-    Images_signal_type,    
+from microspy.signals.particle_analysis import ParticleAnalysis
+from microspy.signals._microspy_signals import (
+    Images_signals,    
     Images,
     MicroSpySignal2D,
     MicroSpySignal2D_Parent,
@@ -37,6 +37,10 @@ from src.microspy.signals._microspy_signals import (
     MicroSpySignal1D_Chemistry,
     MicroSpySignal1D_Geometry
 )
+
+from microspy import __version__ as microspy_version
+from microspy.misc import exceptions
+from microspy.signals.particle_analysis import IMAGES_SIGNAL_TYPES
 
 from ._utils import (
     replace_none,
@@ -57,15 +61,14 @@ def file_reader(
 ) -> ParticleAnalysis:
     """Read an :class:'~microspy.signals.ParticleAnalysis' signal.
     
-    Not meant to be used directly; use
-    :func:`~microspy.load`.
+    Not meant to be used directly; use :func:`~ParticleAnalysis.load`.
 
     Parameters
     ----------
     filename
-        Full path of hspy file.
+        Full path of hdf5 file.
     """
-    print("MULTIPLE EXPERIMENTS NOT YET SUPPORTED.")
+    exceptions.formatted_warning("Multiple experiments not yet supported.")
 
     with File(filename, mode = "r", **kwargs) as f:
         file_dict = hdf5group2dict(f["/"], recursive=True)
@@ -83,6 +86,7 @@ def dict2microspyList(dictionary : dict) -> list:
         ---------------------------------------------
         dictionary
         ├──manufacturer
+        ├──version
         └──signals/
             ├── MicroSpySignal1D/
             │   ├── axes_manager : dict
@@ -95,7 +99,7 @@ def dict2microspyList(dictionary : dict) -> list:
             │   ├── axes_manager : dict
             │   ├── data : np.ndarray
             │   └── name : signal name typically repr. signal type 
-            │              through Images_signal_type
+            │              through Images_signals
             ├── ...
             ├── metadata : dict
             └── particle_classes : np.ndarray
@@ -108,11 +112,12 @@ def dict2microspyList(dictionary : dict) -> list:
     """
     from copy import deepcopy
     dictionary = deepcopy(dictionary)
+    
+    # Get manufacturer and version
+    read_manufacturer = dictionary.get("manufacturer")
+    read_version = dictionary.get("version")
 
-    # Get manufacturer and particle classes
-    manufacturer = dictionary.get("manufacturer")
-
-    # Particle classes: <Class name1> = array([...])
+    # Get particle classes: <Class name1> = array([...])
     pclasses = dictionary["signals"].get("particle_classes")
     particle_classes = np.empty(
         pclasses[list(pclasses.keys())[0]].size, 
@@ -121,30 +126,33 @@ def dict2microspyList(dictionary : dict) -> list:
     for cl, classified in pclasses.items():
         particle_classes[classified] = cl
     
-    # Reorganise metadata
+    # Reorganise the signal's metadata
     md = dictionary.get("signals").get("metadata")
     md["General"].update(
-        {"manufacturer" : manufacturer}
+        {
+            "manufacturer" : read_manufacturer,
+            "version" : read_version
+        }
     )
     md["Sample"] = {
         "classes" : particle_classes,
+        "acquisition_order" : dictionary.get(
+            "signals"
+        ).get(
+            "metadata"
+        ).get(
+            "Acquisition_order"
+            )
     }
+    del md["Acquisition_order"]
     
     # Temporarily get 1D signals (unnecessary conversion...)
     signals = dict2ListOfMicroSpySignal1D(
         dictionary.get("signals")
     )
-    #signals[0].metadata.add_dictionary(md)
 
     # Update Sample metadata
     md["Sample"]["elements"] = signals[0].metadata.get_item("Signal.props")
-
-    # Reorganise Acquisition order: Keep at all?
-    #md["Sample"]["acquisition_order"] = dictionary.get(
-    #    "signals"
-    #).get("metadata").get("Acquisition_order")
-    #try: del md["Acquisition_order"]
-    #except KeyError: pass
     
     # Set "data" key
     data = {
@@ -163,7 +171,9 @@ def dict2microspyList(dictionary : dict) -> list:
     # Set images as attribute if they exists in the dictionary.
     has_images = dictionary["signals"].get("has_images") 
     if has_images:
-        print("Currently not supporting multiple experiments (images)")
+        exceptions.formatted_warning(
+            "Currently not supporting multiple experiments (Images)"
+        )
         images = [
             dict2ListOfMicroSpySignal2D(dictionary["signals"])
             ]
@@ -173,7 +183,7 @@ def dict2microspyList(dictionary : dict) -> list:
     msList = [
         {
             "metadata" : md,
-            #"original_metadata" : md.get("original_metadata"),
+            #"Original_metadata" : md.get("Original_metadata"),#No interest
             "data" : data,
             "images" : images
         }
@@ -183,8 +193,9 @@ def dict2microspyList(dictionary : dict) -> list:
 def dict2ListOfMicroSpySignal1D(
     dictionary : dict
 ) -> list:
-    """Get a list of MicroSpySignal1D from necessary items in a 
-    dictionary.
+    """Get a list of MicroSpySignal1D from necessary items in the dictionary.
+    
+    Not meant to be used directly.
 
     Parameters
     ----------
@@ -199,7 +210,7 @@ def dict2ListOfMicroSpySignal1D(
     from copy import deepcopy
     dictionary = deepcopy(dictionary)
 
-    # Keywords to look for:
+    # Keywords to look for in the dictionary argument:
     kwds = ("Chemistry", "Geometry")
     signals = [] 
     
@@ -232,8 +243,9 @@ def dict2ListOfMicroSpySignal1D(
 def dict2ListOfMicroSpySignal2D(
     dictionary : dict
 ) -> list:
-    """Get a list of MicroSpySignal2D from necessary items in a 
-    dictionary.
+    """Get a list of MicroSpySignal2D from necessary items in a dictionary.
+    
+    Not meant to be used directly.
 
     Parameters
     ----------
@@ -249,25 +261,21 @@ def dict2ListOfMicroSpySignal2D(
     dictionary = deepcopy(dictionary)
 
     # Keywords to look for:
-    kwds = list(Images_signal_type.keys())
+    kwds = list(IMAGES_SIGNAL_TYPES.keys())
     signals = [] 
     
     for key, val in dictionary.items():
         if key in kwds: 
-            if key.lower() in "ParentSig".lower():
-                sig = MicroSpySignal2D_Parent(
-                    val.get("data"),
-                    #axes = [val.get("axes_manager")]
-                )
-            else:
-                sig = MicroSpySignal2D(
-                    val.get("data"),
-                    #axes = [val.get("axes_manager")]
-                )
-
-            # Set remaining metadata:
-            sig.metadata.set_item("General.title", val.get("name"))
-            sig.metadata.set_item("Signal.signal_type", key)
+            sig = IMAGES_SIGNAL_TYPES[key](
+                val.get("data"),
+                axes = val.get("axes_manager").values(),
+                **{"metadata" : 
+                    {
+                        "General" : {"title" : val.get("name")},
+                        "Signal" : {"signal_type" : key}
+                    }
+                },
+            )
             
             signals.append(sig)
             
@@ -281,6 +289,8 @@ def hdf5group2dict(
 ) -> dict:
     """Return a dictionary with values from datasets in a group in an
     opened HDF5 file.
+    
+    Note meant to be used directly.
 
     Note!
     Copied from :orix:'_h5ebsd.hdf5group2dict'.
@@ -337,8 +347,7 @@ def file_writer(
     """Write an :class:'~microspy.signals.ParticleAnalysis' signal
     to a new hspy file.
     
-    Not meant to be used directly; use
-    :func:`~microspy.signals.ParticleAnalysis.save`.
+    Not meant to be used directly; use :func:`ParticleAnalysis.save`.
 
     Parameters
     ----------
@@ -356,11 +365,12 @@ def file_writer(
     try: f = File(filename, mode="w")
     except OSError:
         raise OSError(f"Cannot write to the already opened file '{filename}'.")
-
-    # Import version?
+    
+    manufacturer = signal.metadata.get_item("Acquisition_instrument.vendor")
+    
     file_dict = {
-        "manufacturer" : "microspy",
-        #"version" : version,
+        "manufacturer" : manufacturer,
+        "version" : microspy_version,
         "signals" : microspySignals2dict(signal),
     }
     
@@ -378,6 +388,8 @@ def microspySignals2dict(
 ) -> dict:
     """Get a dictionary from a :class:'~particle_analysis.ParticleAnalysis'
     object with "data" and "header" keys with values.
+    
+    Not meant to be used directly.
 
     Parameters
     ----------
@@ -386,8 +398,8 @@ def microspySignals2dict(
     dictionary
         Dictionary to update with microspy signal information. If not given
         (default), a new dictionary is created.
-    **kwargs
-        See MicroSpySignal1D2dict and dict2MicroSpySignal1D
+    kwargs
+        Keyword arguments. See MicroSpySignal1D2dict and dict2MicroSpySignal1D
 
     Returns
     -------
@@ -401,7 +413,7 @@ def microspySignals2dict(
     if dictionary is None: 
         dictionary = {}
 
-    # Iterate through attributes and create dictionaries of them:
+    # Iterate through attributes and create dictionaries of them (1 and 2D):
     for attribute, value in vars(signal).items():
         if isinstance(value, MicroSpySignal1D):
             dictionary = MicroSpySignal1D2dict(
@@ -415,7 +427,8 @@ def microspySignals2dict(
                         signal = val,
                         dictionary = dictionary
                     )
-                    
+             
+    # If the signal contains Images:
     dictionary[
         "has_images"
         ] = True if hasattr(signal, "Images") else False
@@ -437,16 +450,24 @@ def microspySignals2dict(
     # Append metadata of interest:
     md = {}
     smd = signal._metadata.as_dictionary()
-    
+
     md.update(
         {
             "General" : smd.get("General"),
             "Acquisition_instrument" : smd.get("Acquisition_instrument"),
-            "Original_metadata" : smd.get("Original_metadata"),
-            #"Acquisition_order" : smd.get("Sample").get("acquisition_order")
+            #"Original_metadata" : smd.get("Original_metadata"),#No interest
+            #"Sample" : smd.get("Sample")#Lists with strings not supported
         }
     )
-
+    
+    # Append acquisition order:
+    if dictionary["has_images"]:
+        md.update(
+            {
+                "Acquisition_order" : smd.get("Sample").get("acquisition_order")
+            }
+        )
+    
     dictionary["metadata"] = md
 
     return dictionary
@@ -456,7 +477,9 @@ def MicroSpySignal2D2dict(
     signal : MicroSpySignal2D,
     dictionary : dict | None = None,
 ) -> dict:
-    """Get a dictionary of a MicroSpySignal2D signal
+    """Get a dictionary of a MicroSpySignal2D signal.
+    
+    Not meant to be used directly.
     
     Parameters
     ----------
@@ -495,6 +518,8 @@ def MicroSpySignal1D2dict(
     **kwargs
 ) -> dict:
     """Get a dictionary of a MicroSpySignal1D signal.
+    
+    Not meant to be used directly.
 
     Note!
     Lists with strings are converted to single strings. To separate
@@ -529,7 +554,7 @@ def MicroSpySignal1D2dict(
         "axes_manager" : signal.axes_manager.as_dictionary()
     }
 
-    # lists not supported:
+    # Lists are not supported:
     units = signal.metadata.get_item("Signal.units")
     dictionary[signal_type]["units"] = _listWithStrings2string(
         units,
@@ -551,6 +576,8 @@ def dict2hdf5group(
 ):
     """Write a dictionary to datasets in a new group in an opened HDF5
     file.
+    
+    Not meant to be used directly.
 
     Note!
     Copied from :orix:'orix_hdf5.dict2hdf5'.
@@ -585,8 +612,8 @@ def dict2hdf5group(
                 dshape = np.shape(val)
             except TypeError:
                 warnings.warn(
-                    "The microspy HDF5 writer could not write the following information "
-                    f"to the file: '{key} : {val}'."
+                    "The microspy HDF5 writer could not write the following "
+                    f"information to the file: '{key} : {val}'."
                 )
                 break
         group.create_dataset(key, shape=dshape, dtype=ddtype, **kwargs)

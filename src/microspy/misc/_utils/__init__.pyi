@@ -1,3 +1,6 @@
+#
+# Copyright 2026 the microspy developer(s)
+#
 # This file is part of microspy.
 #
 # microspy is free software: you can redistribute it and/or modify
@@ -12,25 +15,4 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
-
-from .io._io import load
-from . import (
-    signals,
-    data,
-    draw,
-    misc,
-    selection,
-)
-
-# Define the public API of the module
-__all__ = [
-    # Functions
-    "load",
-
-    # Modules
-    "signals",
-    "data",
-    "draw",
-    "misc",
-    "selection",
-]
+# 

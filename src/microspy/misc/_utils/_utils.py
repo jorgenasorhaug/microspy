@@ -19,36 +19,33 @@
 # This code is inspired by exspy : ~exspy._misc.elements.py
 #
 
-import numpy as np
+def _path_exists(
+    path : str
+) -> bool:
+    """Check if directory exists. If not, the function will ask the user 
+    whether to create it.
 
-def _get_table(
-    data : np.ndarray,
-    label : list | tuple
-):
-    """Structure data and labels to fit tabulate's functions
-    
     Parameters
     ----------
-    data
-        Data to be printed
-    label
-        List of labels : will be printed at the left of each row 
+    path
+        directory
+    """
+    from pathlib import Path
 
-    Returns
-    -------
-    table 
-        List of lists that fits the tabulate functions
+    folder = Path(path)
 
-    Example
-    -------
-    >>> values_to_print = np.asarray(([1,2,3],[1,2,3],[1,2,3]))
-    >>> values_to_print.shape
-    (3, 3)
-    >>> labels_to_print = ['row1','row2','row3']
-    >>> _get_table(values_to_print, labels_to_print)
-    array([['row1', 1, 2, 3],
-           ['row2', 1, 2, 3],
-           ['row3', 1, 2, 3]], dtype=object)
-    """ 
+    if not folder.exists():
+        
+        ans = input(f"Couldn't find folder {path}.\nCreate folder? (y/[n])")
 
-    return np.insert(data.astype(object), 0, label, axis = 1)
+        if ans.upper() == 'Y' or ans == '':
+
+            print(f"Creating folder {path}")
+            
+            os.mkdir(path)
+
+            return True
+
+        else: return False
+
+    else: return True

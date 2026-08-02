@@ -17,8 +17,6 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-""" Reader of images as saved by Jeol's particle analysis software"""
-
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings, os
@@ -26,11 +24,11 @@ from pathlib import Path
 
 from tqdm import tqdm_notebook
 
-from src.microspy.io._utils import (
+from microspy.io._utils import (
     _identify_filenames_of_interest as get_filenames,
     _identify_subdirectories_of_interest as get_subdirectories
 )
-from src.microspy._misc._misc import (
+from microspy.misc._misc import (
     values_change_after_dtype_change
 )
 
@@ -430,5 +428,4 @@ def file_writer(
         Complete path and filename
     """
     print("MULTIPLE EXPERIMENTS NOT SUPPORTED YET.")
-
     raise OSError("Images file writing is not yet supported.")

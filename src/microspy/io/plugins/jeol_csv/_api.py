@@ -17,17 +17,14 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-"""Reader and writer of particle analysis data from Jeol's particle 
-analysis."""
-
 import pandas as pd
 from pathlib import Path
 import warnings, re, os
 import numpy as np
 import warnings
 
-from src.microspy._misc import exceptions 
-from src.microspy.io._utils import(
+from microspy.misc import exceptions 
+from microspy.io._utils import(
     get_subdirectories,
     get_directory_filenames,
     _identify_subdirectories_of_interest,
@@ -35,8 +32,7 @@ from src.microspy.io._utils import(
 )
 
 def file_reader(filename : str | Path):
-    """Read particle analysis data from a .csv file using 
-    pandas dataframe.
+    """Read particle analysis data from a csv file using pandas dataframe.
 
     Parameters
     ----------
@@ -49,8 +45,7 @@ def file_reader(filename : str | Path):
         [particle chemistry, particle geometry, and original metadata]
     """
 
-    warnings.warn("\nMultiple stubs have not been tested yet ...",
-                 UserWarning)
+    exceptions.formatted_warning("Multiple stubs has not been tested yet!")
 
     # Data dictionary
     acquisition = {}
@@ -58,8 +53,12 @@ def file_reader(filename : str | Path):
     md = {}
 
     filename = str(filename)
+    
     # Load pandas dataframe 
     file = pd.read_csv(filename)
+    # Alternative: 
+    # file = np.genfromtxt(..., delimiter=",",encoding="utf-8", names=True)
+    
 
     # Get the stored metadata keys and values
     # These are typically stored in the two first columns,
@@ -156,8 +155,8 @@ def _get_acquisition_data_from_file(
         'orientation'
     ]
 ) -> tuple[dict, dict]:
-    """Get acquisition data such as label name, analysis dat, 
-    class name, and stub positions.
+    """Get acquisition data such as label name, analysis dat, class name, 
+    and stub positions.
 
     Arguments
     ---------
@@ -206,7 +205,7 @@ def _get_acquisition_data_from_file(
     
     """
 
-    from src.microspy._misc.material import elements
+    from microspy.misc.material import elements
     ELEMENTS = list(elements.keys())
 
     # Making sure all the keywords are lower case
@@ -307,10 +306,11 @@ def _get_acquisition_data_from_file(
     return data, additional_data
 
     
-def _get_metadata_from_jeol_csv_file(file : pd.core.frame.DataFrame) -> tuple[list, list, str]:
-    """Get acquisition metadata from the dataframe. 
-    These are typically Acquisition date, stub name, number 
-    of particles, etc.
+def _get_metadata_from_jeol_csv_file(
+    file : pd.core.frame.DataFrame
+) -> tuple[list, list, str]:
+    """Get acquisition metadata from the dataframe. These are typically 
+    Acquisition date, stub name, number of particles, etc.
     
     Argument
     --------
@@ -359,7 +359,9 @@ def _lists_to_dict(
     keys : list, 
     values : list
 ) -> dict:
-    """Set two lists of values into a dicitonary
+    """Set two lists of values into a dicitonary.
+    
+    Not meant to be used directly.
 
     Parameters
     ----------
@@ -387,8 +389,9 @@ def file_writer(
     filename : str | Path,
     signal
 ) -> None:
-    """Write results from particle analysis to Jeol's
-    text file.
+    """Write results from particle analysis to Jeol's text file format csv.
+
+    Not meant to be used directly.
 
     Parameters
     ----------

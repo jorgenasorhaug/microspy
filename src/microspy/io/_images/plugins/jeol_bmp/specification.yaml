@@ -1,9 +1,9 @@
-name: JEOL
+name: jeol_bmp
 description: >
   Read support for microscopy data from particle analysis
   stored in png and bitmap files.
 file_extensions: [""] # Folder structure
 default_extension: 0
-writes: [[2, 2], [2, 1], [2, 0]]
+writes: False
 manufacturer: Jeol
 footprints: []

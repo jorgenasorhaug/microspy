@@ -30,22 +30,21 @@ from hyperspy._signals.signal2d import Signal2D
 
 PLUGINS : list = []
 WRITE_EXTENSIONS : list = []
+PARTSi = 5
 
-print("Change 'from_parts' to 5? (exclude src.)")
-from_parts = 6
-
-# Look for yaml files and append extensions and writers:
+# Look for yaml files and append file extensions and file writers:
 specification_paths = list(Path(__file__).parent.rglob("specification.yaml"))
 for path in specification_paths:
-    with open(path) as file:
-        # specification as dictionary
-        spec = yaml.safe_load(file)
-        # append directories
-        spec["api"] = ".".join(path.parts[-from_parts:-1]) 
-        PLUGINS.append(spec)
-        if spec["writes"]:
-            for ext in spec["file_extensions"]:
-                WRITE_EXTENSIONS.append(ext)
+    if "_images" not in path.parts:
+        with open(path) as file:
+            # specification as dictionary
+            spec = yaml.safe_load(file)
+            # append directories
+            spec["api"] = ".".join(path.parts[-PARTSi:-1]) 
+            PLUGINS.append(spec)
+            if spec["writes"]:
+                for ext in spec["file_extensions"]:
+                    WRITE_EXTENSIONS.append(ext)
 
 def load(
     filename : str,
@@ -54,29 +53,32 @@ def load(
     """Load particle analysis results such as chemical composition and 
     particles' geometric properties.
 
-    The function is inspired by kikuchipy.
+    Inspired by kikuchipy.
 
     Parameters
     ----------
     filename
         filename of the csv file
     **kwargs
-        Keyword arguments:
-        "images" : list of MicroSpySignal2D 
+        Keyword arguments passed on to :class:'ParticleAnalysis'.
+        Example: "images" : list of MicroSpySignal2D 
 
     Returns
     -------
     ParticleAnalysis(out)
-        particle analysis signal class.
+        particle analysis signal class. 
         Argument out is a (list of) MicroSpySignal1D
 
-    Note!
-    -----
-    For Images class attribute, it's important to have differen
-        
+    
+    Example
+    -------
+    >> import microspy as ms
+    >> s = ms.load(filename)
+    >> s
+    <Particle analysis, title: sample_name, dimensions: (131)>
     """
     # Avoiding circular import
-    from src.microspy.signals.particle_analysis import ParticleAnalysis 
+    from microspy.signals.particle_analysis import ParticleAnalysis 
     
     filename = str(filename)
     
@@ -101,17 +103,13 @@ def load(
         reader = readers[0]
     else:
         raise IOError(f"Could not read {filename!r}. If the file "
-                      "format is supported, please report this error")
+                      "format is supported, please report this error.")
     
     # Import file reader
-    try: 
-        file_reader = importlib.import_module(reader["api"]).file_reader
-        print("Delete this try-except in the module")
-    except AttributeError:
-        file_reader = importlib.import_module(reader["api"] + "._api").file_reader
-
+    file_reader = importlib.import_module(reader["api"]).file_reader
+    
     # Read data and metadata from file per experiment
-    signal_dicts = file_reader(filename)
+    signal_dicts = file_reader(filename) # list of experiments
     
     # Iterate through experiments:
     if isinstance(signal_dicts, list):
@@ -124,21 +122,14 @@ def load(
             )
             
             images.append(signal.get("images"))
-            
-            #directory, filename = os.path.split(os.path.abspath(filename))
-            #filename, extension = os.path.splitext(filename)
-            #for sig in out:
-            #    sig.metadata.set_item("General.folder", directory)
-            #    sig.metadata.set_item("General.filename", filename)
-            #    sig.metadata.set_item("General.extension", extension.replace(".", ""))
         
         if len(out) == 1: 
             out = out[0]
             images = images[0]
         
-        kwargs["images"] = images
+        kwargs.update({"images" : images})
         
-        # Return ParticleAnalysis class
+        # Return ParticleAnalysis class:
         return ParticleAnalysis(out, **kwargs)
 
     else:
@@ -204,7 +195,7 @@ def _dict2signals(
                    }
                 )
         )
-
+        
         # Set metadata
         out[-1].metadata.add_dictionary(md)
         out[-1].metadata.set_item("Original_metadata", omd)
@@ -227,7 +218,7 @@ def _assign_signal_subclass(
     -------
     signal_subclass
     """
-    from src.microspy.signals._microspy_signals import (
+    from microspy.signals._microspy_signals import (
         MicroSpySignal1D, 
         MicroSpySignal1D_Chemistry, 
         MicroSpySignal1D_Geometry
@@ -238,7 +229,7 @@ def _assign_signal_subclass(
         'chemistry' : MicroSpySignal1D_Chemistry, 
         'geometry' : MicroSpySignal1D_Geometry
     }
-
+    
     if signal_type not in signal_subclasses.keys():
 
         raise AttributeError(f"{signal_type} is not recognised.")
@@ -249,7 +240,8 @@ def _save(
     filename : str | Path,
     signal,
 ) -> None:
-    """Write a signal to file in a supported format.
+    """Write a signal to file in a supported format. The function is 
+    used by the particle_analysis class object for saving. (See example.)
 
     Parameters
     ----------
@@ -257,6 +249,18 @@ def _save(
         File path including filename
     signal
         Signal instance.
+        
+    Examples
+    --------
+    >> import microspy as ms
+    >> s = ms.load(filename)
+    >> s
+    <Particle analysis, title: title, dimensions: (131)>
+    
+    >> s.save("new_filename.hdf5")
+    >> s1 = s.load("new_filename.hdf5")
+    >> s1
+    <Particle analysis, title: title, dimensions: (131)>
     """
     filename = str(filename)
     directory = os.path.split(filename)[0]
@@ -265,7 +269,7 @@ def _save(
 
     ext = os.path.splitext(filename)[1][1:]
     if ext == "": # Write as 
-        ext = "csv"#"hdf5"
+        ext = "hdf5"
         filename += f".{ext}"
 
     writer = None
@@ -283,18 +287,14 @@ def _save(
         # Check if file already exists
         is_file = os.path.isfile(filename)
         if is_file:
-            ans = input(f"File {filename!r} already exists. "
-                        "Overwrite? (y/[n])")
-            is_file = True if ans.lower() in ("y","yes") else False
+            ans = input(f"File {filename!r} already exists.\n"
+                        "Overwrite file? (y/[n])")
+            is_file = False if ans.lower() in ("y","yes") else True
 
         if not is_file:
-            # Get file reader
-            try: 
-                file_writer = importlib.import_module(writer["api"]).file_writer
-                print("Delete this try-except in the module.")
-            except AttributeError:
-                file_writer = importlib.import_module(writer["api"] + "._api").file_writer
-            
+            # Get file writer
+            file_writer = importlib.import_module(writer["api"]).file_writer
+                        
             file_writer(
                 filename = filename, 
                 signal = signal

@@ -17,15 +17,18 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-ALLOWED_VENDORS = [
-    "Jeol"
-]
+from microspy.misc import exceptions
+
+ALLOWED_VENDORS = (
+    "microspy",
+    "jeol",
+)
 
 def _image_directory_searcher(
     vendor : str
-) -> str:
-    """Search for image directory according to vendor by 
-    walking through the sub-directories
+):
+    """Search for image directory according to vendor by walking through 
+    the sub-directories.
 
     Parameters
     ----------
@@ -38,7 +41,7 @@ def _image_directory_searcher(
         An image directory searcher
     """
     
-    vendor = str(vendor)
+    vendor = str(vendor).lower()
     if vendor not in ALLOWED_VENDORS:
         raise ValueError(f"Vendor {vendor} not recognised "
                          "or supported yet.")
@@ -47,9 +50,13 @@ def _image_directory_searcher(
     vendors ...
     readers ...
     """
-
-    if vendor.lower() == "jeol":
-        from .plugins.jeol_subdirs._utils import (
+    
+    exceptions.formatted_warning(
+        ":_images._utils: Define readers?"
+    )
+    
+    if vendor == "jeol":
+        from microspy.io._images.plugins.jeol_bmp._utils import (
             search_for_image_directory as reader
         )
 

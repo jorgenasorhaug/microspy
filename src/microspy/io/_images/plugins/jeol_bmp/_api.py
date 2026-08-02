@@ -26,11 +26,11 @@ from pathlib import Path
 
 from tqdm import tqdm_notebook
 
-from src.microspy.io._utils import (
+from microspy.io._utils import (
     _identify_filenames_of_interest as get_filenames,
     _identify_subdirectories_of_interest as get_subdirectories
 )
-from src.microspy._misc._misc import (
+from microspy.misc._misc import (
     values_change_after_dtype_change
 )
 
@@ -112,7 +112,9 @@ def file_reader(
                     folders = folders,
                     image_extension = image_extension[2],
                     set_dtype = set_dtype,
-                    centre_particle_images = kwargs.get("centre_particle_images")
+                    centre_particle_images = kwargs.get(
+                        "centre_particle_images"
+                    )
                 )
                 
             else: particle_images = []
@@ -126,7 +128,9 @@ def file_reader(
         return out
 
     else:   
-        warnings.warn(f"Coudn't find directory {os.path.splitext(filename)[0]!r}") 
+        warnings.warn(
+            f"Coudn't find directory {os.path.splitext(filename)[0]!r}"
+        ) 
 
         return [[], [], []]
 
@@ -298,8 +302,8 @@ def _load_particle_images(
 
     path = Path(path)
 
+    # Total number of particle images:
     if num_images == None:
-
         num_images = _estimate_number_of_particles_based_on_folders(
             path = path,
             folders = folders

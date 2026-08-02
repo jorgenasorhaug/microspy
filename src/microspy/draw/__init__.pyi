@@ -17,7 +17,22 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-from . import imaging
-from ._colouring import DEFAULT_COLORS
+from .imaging import (
+    stitch_grid_signal, 
+    label2rgb,
+    get_grid_mask,
+)
+from ._colouring import (
+    DEFAULT_COLOURS,
+    get_discrete_colour_map,
+    Closest_colorname,
+)
 
-__all__ = ["imaging", "DEFAULT_COLORS"]
+__all__ = [
+    "stitch_grid_signal", 
+    "label2rgb",
+    "get_grid_mask",
+    "DEFAULT_COLOURS",
+    "get_discrete_colour_map",
+    "Closest_colorname",
+]

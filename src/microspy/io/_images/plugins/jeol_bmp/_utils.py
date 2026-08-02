@@ -19,10 +19,7 @@
 
 import os
 
-from src.microspy.io._utils import (
-    _identify_subdirectories_of_interest
-)
-from src.microspy.io._utils import (
+from microspy.io._utils import (
     _identify_subdirectories_of_interest
 )
 
@@ -30,16 +27,21 @@ def _estimate_number_of_particles_based_on_folders(
     path : str,
     folders : list,
     keyword = 'Particle'
-):
-    """Estimate the total number of analysed particles
-    by the total number of particle image folders.
-    
-    See ~microspy.io.plugins.JEOLcsv._api._load_particle_images 
-    for the expected folder structure.
+) -> int:
+    """Estimate the total number of analysed particles from the total number 
+    of particle image folders.
 
     Parameters
     ----------
-    
+    path
+        Folder directory.
+    folders
+        List of folder paths.
+    keyword
+        Look for keyword to estimate the number of particles.
+        
+    Returns
+    -------
     """
     from pathlib import Path
     
@@ -62,9 +64,9 @@ def search_for_image_directory(
     path : str,
     keyword : str = "Sutb"
 ) -> str:
-    """Search for potential sub-directory where images are stored.
-
-    OBS! Not tested for multiple paths
+    """Search for potential sub-directory where images are stored. If 
+    multiple subdirectories are found with the keyword, an error will be
+    raised. 
 
     Parameters
     ----------

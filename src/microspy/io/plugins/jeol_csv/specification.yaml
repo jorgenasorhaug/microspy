@@ -1,7 +1,7 @@
-name: JEOLcsv
+name: jeol_csv
 description: > 
     Read/write support for Jeol's dataframe
 file_extensions: ["csv"]
-writes: [[2, 2], [2, 1], [2, 0]]
+writes: True
 manufacturer: Jeol
 footprints: []

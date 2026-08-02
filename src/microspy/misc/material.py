@@ -17,6 +17,7 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 # This code is inspired by exspy : ~exspy._misc.elements.py
+#
 
 import numpy as np
 import json
@@ -25,8 +26,11 @@ import os
 from pathlib import Path
 from hyperspy.misc.utils import DictionaryTreeBrowser
 
+EXSPY_ELEMENTS_LINES_URL = "https://raw.githubusercontent.com/hyperspy/exspy/refs/heads/main/exspy/material/xray_lines.json"
+EXSPY_GENERAL_PROPS_URL = "https://raw.githubusercontent.com/hyperspy/exspy/refs/heads/main/exspy/material/elements_general_properties.json"
+
 def _download_exspy_data(url):
-    """Download exspy raw file and save it in parent path.
+    """Download exspy raw file and save it in file directory.
 
     Parameters
     ----------
@@ -42,56 +46,61 @@ def _download_exspy_data(url):
     response = get(url)
     
     if response.status_code == 200:
-        print(f"Downloading material properties from " 
-            f"{url}")
-        data = response.json()  # Converts response to a Python dictionary/list
+        print(f"Downloading material properties from {url}")
+        # Convert response to a Python dictionary/list
+        data = response.json()  
 
-        if isinstance(data, list): print('Fix list->dict convertion')
+        if isinstance(data, list): 
+            print('Fix list -> dict conversion')
     else:
         print(f"Failed to download {url}."
-              "Status code: {response.status_code}")
+              f"Status code: {response.status_code}")
         data = {}
 
     return data
 
 def _download_elements_general_properties():
-    """Check if elements_general_properties.json exists is 
-    parent path. If not, download it from github."""
+    """Download elements_general_properties from github and save it as a 
+    json file to the current directory, if it doesn't already exist.
+    """
 
     file_path = Path(__file__).parent / "elements_general_properties.json"
     
     # Download general elements properties
     if not file_path.is_file():
-        exspy_material_prop_url = "https://raw.githubusercontent.com/hyperspy/exspy/refs/heads/main/exspy/_misc/elements_general_properties.json"
+        exspy_material_prop_url = EXSPY_GENERAL_PROPS_URL
         data = _download_exspy_data(exspy_material_prop_url)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
+        if bool(data): # not empty dictionary
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
 
 def _download_elements_lines_properties():
-    """Check if python file exists. If not, download it from github"""
-
+    """Download xray_lines from github and save it as a json file to the 
+    current directory, if it doesn't already exist.
+    """
     file_path = Path(__file__).parent / "xray_lines.json"
     
     # Download general elements properties
     if not file_path.is_file():
-        exspy_material_prop_url = "https://raw.githubusercontent.com/hyperspy/exspy/refs/heads/main/exspy/_misc/eds/xray_lines.json"
+        exspy_material_prop_url = EXSPY_ELEMENTS_LINES_URL
         data = _download_exspy_data(exspy_material_prop_url)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
+        if bool(data): # not empty dictionary
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
         
 
 def _load_json_data(file_path):
-    """Load JSON data from file and extract elements section."""
+    """Load json data from file and extract "elements section"."""
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data.get("elements", {})
 
 
 def _load_elements_data():
-    """Load and merge elements data from JSON files."""
+    """Load and merge elements data from json files."""
     # Get the directory containing this file
     current_dir = Path(__file__).parent
-
+    
     # Load data from JSON files
     general_properties_path = current_dir / "elements_general_properties.json"
     xray_lines_path = current_dir / "xray_lines.json"
@@ -102,7 +111,7 @@ def _load_elements_data():
 
     general_data = _load_json_data(general_properties_path)
     xray_data = _load_json_data(xray_lines_path)
-
+    
     # Merge data into the expected structure
     elements = {}
 
@@ -141,6 +150,10 @@ def _load_elements_data():
 
 # Load elements data from JSON files
 elements = _load_elements_data()
+
+ELEMENTS = list(elements.keys())
+ELEMENTS.sort()
+
 elements_db = DictionaryTreeBrowser(elements)
 elements_db.__doc__ = """
 Database of element properties.
@@ -156,7 +169,7 @@ The following properties are included:
     │   ├── atomic_weight
     │   └── name
     └── Physical_properties
-        └── density_gcm3
+        └── density_gcm-3
 
 see : ~exspy._misc.elements
 """
@@ -166,6 +179,9 @@ def _weight_to_atomic(
     elements : list
 ) -> np.ndarray:
     """Convert weight/mass percent (wt%) to atomic percent (at.%).
+    
+    Note!
+    This function is part of eXSpy.
 
     Parameters
     ----------
@@ -206,6 +222,9 @@ def weight_to_atomic(
     elements : list | tuple
 ) -> np.ndarray:
     """Convert weight/mass percent (wt%) to atomic percent (at.%).
+    
+    Note!
+    This function is part of eXSpy.
 
     Parameters
     ----------
@@ -245,6 +264,9 @@ def _atomic_to_weight(
     elements : list | tuple
 ) -> np.ndarray:
     """Convert atomic percent to weight percent.
+    
+    Note!
+    This function is part of eXSpy.
 
     Parameters
     ----------
@@ -286,6 +308,9 @@ def atomic_to_weight(
     elements : list | tuple
 ) -> np.ndarray:
     """Convert atomic percent to weight percent.
+    
+    Note!
+    This function is part of eXSpy.
 
     Parameters
     ----------

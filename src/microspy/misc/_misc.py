@@ -16,14 +16,12 @@
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
-# This code is inspired by exspy : ~exspy._misc.elements.py
-
 
 import numpy as np
 import warnings, os
 from tabulate import tabulate
 
-from . import exceptions as _errorss
+from . import exceptions as _errors
 from ._utils import _utils, _io
 
 from . import material
@@ -35,6 +33,7 @@ VENDORS = [
 
 # https://pythonforundergradengineers.com/unicode-characters-in-python.html
 GREEK_LETTERS = {
+    # lowercase
     "alpha" : "\u03B1",
     "beta" : "\u03B2",
     "gamma" : "\u03B3",
@@ -61,6 +60,7 @@ GREEK_LETTERS = {
     "psi" : "\u03C8",
     "omega" : "\u03C9",
 
+    # uppercase
     "Alpha" : "\u0391",
     "Beta" : "\u0392",
     "Gamma" : "\u0393",
@@ -88,86 +88,8 @@ GREEK_LETTERS = {
     "Theta" : "\u03F4"
 }
 
-
-
-"""
-numpy_image_datatypes = [
-    np.bool_, np.byte, np.ubyte, 
-    np.int_, np.int8, np.int16, np.int32, np.int64,
-    np.uint, np.uint8, np.uint16, np.uint32, np.uint64,
-    np.float16, np.float32, np.float64
-]
-
-def _check_for_numpy_ndarray(array):
-    #Helping function to check if array is a numpy array
-    return type(array) == np.ndarray
-
-def _check_for_same_shape(array1, array2):
-    #Helping function to check if two arrays are of the same shape
-    if ~_check_for_numpy_ndarray(array1): raise TypeError(f'First argument of type {type(array1)} is not a numpy array')
-    if ~_check_for_numpy_ndarray(array2): raise TypeError(f'Second argument of type {type(array2)} is not a numpy array')
-    return array1.shape == array2.shape
-"""
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% UTILITIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        
-import os
-import ast
-
-def get_standalone_functions(file_path):
-    """Parses a .py file and returns a list of top-level function names."""
-    functions = []
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            node = ast.parse(f.read())
-            # Only extract functions at the top level of the module (node.body)
-            # This automatically skips methods inside classes
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    functions.append(item.name)
-    except Exception as e:
-        return [f"Error parsing: {str(e)}"]
-    return functions
-
-def generate_structure_md(root_dir, output_file="PROJECT_STRUCTURE.md"):
-    """Traverses directories and builds a Markdown file of the structure."""
-    md_lines = [f"# Project Structure: {os.path.basename(root_dir)}\n"]
-    
-    for root, dirs, files in os.walk(root_dir):
-        # Calculate indentation level for the directory
-        level = root.replace(root_dir, '').count(os.sep)
-        indent = "  " * level
-        folder_name = os.path.basename(root) or root_dir
-
-        if folder_name not in (".ipynb_checkpoints",
-                              "__pycache__"):
-            md_lines.append(f"{indent}- 📁 {folder_name}/")
-        
-        for file in sorted(files):
-            if file.endswith(".py") and file not in ("__init__.py",
-                                                    "__init__.pyi") and "checkpoint" not in file:
-                file_indent = "  " * (level + 1)
-                md_lines.append(f"{file_indent}- 📄 {file}")
-                
-                # Extract and list functions under the file
-                funcs = get_standalone_functions(os.path.join(root, file))
-                for func in funcs:
-                    func_indent = "  " * (level + 2)
-                    md_lines.append(f"{func_indent}- `f` {func}()")
-                    
-    # Save to file
-    content = "\n".join(md_lines)
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(content)
-    
-    print(f"Structure successfully saved to {output_file}")
-    print(content)
-
-def _vendor2ImAquisitionOrder(vendor : str):
-    """Return the likely image acquisition order according to 
-    vendor.
+def _vendor2ImAquisitionOrder(vendor : str | None):
+    """Return the image acquisition order according to vendor.
 
     Parameters
     ----------
@@ -176,20 +98,28 @@ def _vendor2ImAquisitionOrder(vendor : str):
 
     Returns
     -------
-    image_orders 
+    horisontal, verticals
         acquisition directions
 
         horisontal directions : ("r2l", "l2r")
         vertical directions : ("t2b", "b2t")
     """
-    if vendor not in VENDORS:
-        raise AttributeError(f"Vendor {vendor} is not recognised. "
-                            f"Allowed vendor arguments are {VENDORS}.")
+    horisontal, vertical = "l2r", "t2b"
+    vendor = str(vendor).lower()
+    
+    if isinstance(vendor, str):
+        if vendor not in VENDORS:
+            raise AttributeError(f"Vendor {vendor} is not recognised. "
+                                 f"Allowed vendor arguments are {VENDORS}.")
 
-    if vendor.lower() == "jeol":
-        return "r2l","t2b"
+        if vendor.lower() == "jeol":
+            horisontal = "r2l"
     else:
-        return None, None
+        _errors.formatted_warning(
+            "Assuming 'r2l' and 't2b' acquisition order."
+        )
+    return horisontal, vertical 
+    
 
 def _vendor2ImFlipAxes(vendor : str):
     """Return the likely image acquisition order according to 
@@ -208,76 +138,93 @@ def _vendor2ImFlipAxes(vendor : str):
         horisontal directions : ("r2l", "l2r")
         vertical directions : ("t2b", "b2t")
     """
-
-    if vendor.lower() == "jeol":
-        return (1,)
+    if isinstance(vendor, str):
+        if vendor.lower() == "jeol":
+            return (1,)
     else:
         return None, None
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%% PROPERTY PRINTING  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
     
 def tabulate_data(
     data : np.ndarray, 
-    headers : list| tuple, 
-    labels : str | list | tuple | np.ndarray = '', 
-    return_table : bool = False,
-    unit : str | None = None
+    headers : list | tuple, 
+    labels : str | list | tuple | np.ndarray = "", 
+    decimals : int = 2,
+    unit : str | None = None,
+    return_table : bool = False
 ):
-    """Print selected particle's property like chemical composition 
-    or geometry.
+    """Nice printing function to displau particles' property like chemical 
+    composition or geometry.
     
     Parameters
     ----------
     data
-        Data to be printed. The data is expected to fit the shape 
-        (len(header), len(label))
-    label
-        List of labels : will be printed at the left of each row 
-    header
-        List of headers : will be printed at the top of each column
+        Data to be printed.
+    headers
+        List of headers printed at the first row. The number of 
+        headers should match data.shape[0].
+    labels
+        List of labels printed at the left column.
+        The number of labels should match data.shape[1]
+    decimals
+        Number of decimals to print. 2 by default.
     unit
-        Header unit. The unit will be printed at the upper left 
+        data unit printed at the upper left cell, above the
+        labels.
+    return_table
+        Whether to return the table, False by default.
 
     Returns
     -------
-
-    Example:
-    -------
+    table
+        numpy ndarray with the table content (excluding 
+        headers and labels).
+        
+    Examples
+    --------
     >>> tabulate_data(
             data : (N,m) data array
-            label : (N,) list of labels, e.g. class names
+            labels : (N,) list of labels, e.g. class names
             headers : (m,) list of headers, e.g. elements
         )
     """ 
-
+    
     data_shape = data.shape
     ndim = np.ndim(data)
+    _data = data.copy()
     
     if ndim == 2:
         
         # Set labels
-        if type(labels) == str:    
-            if labels == '': 
-                labels = np.arange(0, data_shape[1])
-            else:
-                labels = np.repeat(label, data_shape[0])
-
+        if isinstance(labels, str): 
+            if labels == "": # Empty string:
+                labels = np.arange(0, data_shape[0])
+            else: # Single string:
+                labels = np.repeat(labels, data_shape[0])
+        
         if data_shape[0] == len(labels) and data_shape[1] == len(headers):
 
-            # Insert labels in the 0th column
-            table = _utils._get_table(np.round(data, decimals = 2), labels)
+            # Insert labels in the 0th column:
             
-            if return_table: return table 
+            table = _get_table(
+                data = _data, 
+                decimals = decimals, 
+                labels = labels
+            )
 
+            # Update headers:
+            heads = headers.copy()
+            heads.insert(0, "Labels\\")
             if unit is not None:
-                heads = headers.copy()
-                heads.insert(0, unit)
-            else: heads = headers.copy()
-        
+                maxChar = max([len(unit), len("Labels")])
+                minChar = min([len(unit), len("Labels")])-1
+                insert_string = f"{" "*minChar}\\{unit}\n"
+                insert_string += f"{heads[0]}{" "*maxChar}"
+                heads[0] = insert_string
+                
+            # If only return the table:
+            if return_table: 
+                return table 
+            
             print(tabulate(
                 tabular_data = table, 
                 headers = heads, 
@@ -287,35 +234,38 @@ def tabulate_data(
         else: 
             
             print(f"The data shape {data_shape} doesn't fit the "
-                  f"header ({len(headers)}) and/or label ({len(labels)}) "
+                  f"header ({len(headers)}) and/or labels ({len(labels)}) "
                   "shape(s)")
     
     else: 
-        print(f"Data of shape {data_shape} doesn't fit the table.")
+        print(f"Data must have two dimensions.")
 
 def save_tabulate_data(
     data : np.ndarray, 
-    headers : list| tuple, 
+    headers : list | tuple, 
+    labels : str | list | tuple | np.ndarray = "", 
+    decimals : int = 2,
     unit : str | None = None,
-    labels : str | list | tuple | np.ndarray = '', 
     filename : str = 'tabulated.txt', 
 ):
-    """Save tabulated data into a specified format as
-    stated in the filename.
+    """Save tabulated data to a specified format stated by the filename.
 
     Parameters
     ----------
     data
         Data to be printed. The data is expected to fit the 
         shape (len(header), len(label))
-    label
-        List of labels : will be printed at the left of each row 
-    unit
-        Unit of the printed property.
     header
         List of headers : will be printed at the top of each column
+    labels
+        List of labels : will be printed at the left of each row 
+    decimals
+        Number of decimals to save
+    unit
+        Unit of the printed property.    
     filename
         Name of file. By default: txt format.
+        Allowed formats: txt and csv.
     """
 
     ALLOWED_EXTENSIONS = [
@@ -327,25 +277,33 @@ def save_tabulate_data(
     folder, filename = os.path.split(filename)
 
     if file_type not in ALLOWED_EXTENSIONS:
-        raise AttributeError(f"File type {file_type} not recognised "
-                             "or supported yet.")
+        raise AttributeError(
+            f"File type {file_type} not recognised "
+            "or supported yet.")
 
     table = tabulate_data(
         data = data,
         headers = headers, 
         labels = labels, 
+        decimals = decimals,
+        unit = unit,
         return_table = True,
-        )
+    )
 
+    # Update headers
+    heads = headers.copy()
+    heads.insert(0, "Label\\")
     if unit is not None:
-        heads = headers.copy()
-        heads.insert(0, unit)
-    else: heads = headers
+        maxChar = max([len(unit), len("Label")])
+        minChar = min([len(unit), len("Label")])-1
+        insert_string = f"{" "*minChar}\\{unit}\n"
+        insert_string += f"{heads[0]}{" "*maxChar}"
+        heads[0] = insert_string
 
     """
-    file_writers...
+    ... file_writer ...
     """
-
+    
     if file_type == "txt":
         _io._save_tabulated_data_as_txt(
             table = table,
@@ -355,7 +313,6 @@ def save_tabulate_data(
         )   
         
     elif file_type == "csv":
-        
         _io._save_tabulated_data_as_csv(
             table = table,
             headers = heads,
@@ -363,7 +320,44 @@ def save_tabulate_data(
             filename = filename
         )
 
+def _get_table(
+    data : np.ndarray,
+    labels : list | tuple,
+    decimals : int = 2
+):
+    """Structure data and labels to fit :func:'tabulate.tabulate'.
+    
+    Parameters
+    ----------
+    data
+        Data to be printed
+    label
+        List of labels : will be printed at the left of each row 
 
+    Returns
+    -------
+    table 
+        List of lists that fits the tabulate functions
+
+    Example
+    -------
+    >>> values_to_print = np.asarray(([1,2,3],[1,2,3],[1,2,3]))
+    >>> values_to_print.shape
+    (3, 3)
+    >>> labels_to_print = ['row1','row2','row3']
+    >>> _get_table(values_to_print, labels_to_print)
+    array([['row1', 1, 2, 3],
+           ['row2', 1, 2, 3],
+           ['row3', 1, 2, 3]], dtype=object)
+    """ 
+    
+    _data = np.round(
+        #Force to float64 as "lower" dtypes can not be represented 
+        #exactly in binary, i.e. we avoid extra digits:
+        data.astype(np.float64),  
+        decimals = decimals
+    )
+    return np.insert(_data.astype(object), obj = 0, values = labels, axis = 1)
 
 
 
@@ -407,32 +401,32 @@ def stitch_rgb_phase_map(phase_map, nav_shape):
 
     return _image_utils._stitch_images(phase_map_s, shape = nav_shape)
     
-def gridify_3D_array_to_4D(arr, nav_shape):
-    """Gridify the 3D array to 4D. Nav_shape defines the number of images in the different directions.
+# def gridify_3D_array_to_4D(arr, nav_shape):
+    # """Gridify the 3D array to 4D. Nav_shape defines the number of images in the different directions.
 
-    Parameters
-    ----------
-    arr
-        numpy.ndarray of shape (3,)
-    nav_shape
-        Navigation shape to shape the array into
+    # Parameters
+    # ----------
+    # arr
+        # numpy.ndarray of shape (3,)
+    # nav_shape
+        # Navigation shape to shape the array into
 
-    Example
-    ------
-    >>> import particle_analysis as pa
-    >>> import numpy as np
-    >>> img = np.asarray([[[0]*4]*4]*4)
-    >>> img.shape
-    (4,4,4)
-    >>> img = pa.gridify_3D_array_to_4D(arr, nav_shape = (2,2))
-    >>> img.shape
-    (2,2,4,4)
-    """
-    if len(arr.shape) != 3: raise TypeError(f"Array shape {arr.shape} is not expected.")
+    # Example
+    # ------
+    # >>> import particle_analysis as pa
+    # >>> import numpy as np
+    # >>> img = np.asarray([[[0]*4]*4]*4)
+    # >>> img.shape
+    # (4,4,4)
+    # >>> img = pa.gridify_3D_array_to_4D(arr, nav_shape = (2,2))
+    # >>> img.shape
+    # (2,2,4,4)
+    # """
+    # if len(arr.shape) != 3: raise TypeError(f"Array shape {arr.shape} is not expected.")
 
-    if len(nav_shape) != 2: raise TypeError(f"Navigation shape is not valid. Provide a 2-integer list")
+    # if len(nav_shape) != 2: raise TypeError(f"Navigation shape is not valid. Provide a 2-integer list")
 
-    return _image_utils._gridify_3D_array_to_4D(arr, nav_shape + arr.shape[-2:])
+    # return _image_utils._gridify_3D_array_to_4D(arr, nav_shape + arr.shape[-2:])
     
 def greyscale_to_rgba(grey_image, dtype_out = np.float16):
     """Return a grey-scale array as a rgb equivalent
@@ -624,31 +618,6 @@ def get_navigator_colours(image):
     """
     return _colouring.get_rgb_navigator(image)
 
-def get_greek_letter(letter : str):
-    """Return the ¨code representing greek letters for nice printing/name setting"""
-    letters = {
-        "alpha" : "\u03B1",
-        "Alpha" : "\u0391",
-        "beta" : "\u03B2",
-        "Beta" : "\u0392",
-        "delta" : "\u03B4",
-        "Delta" : "\u0394",
-        "mu" : "\u03BC",
-        "Mu" : "\u039C",
-        "pi" : "\u03C0",
-        "Pi" : "\u03A0",
-        "sigma" : "\u03C3",
-        "Sigma" : "\u03A3",
-        "omega" : "\u03C9",
-        "Omega" : "\u03A9"
-    }
-
-    if letter not in letters.keys():
-
-        raise ValueError(f"The letter {letter} is unrecognised.")
-
-    else: return letters[letter]
-
 
 
 
@@ -691,35 +660,6 @@ def values_change_after_dtype_change(
         return not np.allclose(original, converted)
     else:
         return not np.array_equal(original, converted)
-
-def _get_table(data, label):
-    """Structure data and labels to fit tabulate's functions
-    
-    Parameters
-    ----------
-    data
-        Data to be printed
-    label
-        List of labels : will be printed at the left of each row 
-
-    Returns
-    -------
-    table 
-        List of lists that fits the tabulate functions
-
-    Example
-    -------
-    >>> values_to_print = np.asarray(([1,2,3],[1,2,3],[1,2,3]))
-    >>> values_to_print.shape
-    (3, 3)
-    >>> labels_to_print = ['row1','row2','row3']
-    >>> _get_table(values_to_print, labels_to_print)
-    array([['row1', 1, 2, 3],
-           ['row2', 1, 2, 3],
-           ['row3', 1, 2, 3]], dtype=object)
-    """ 
-
-    return np.insert(np.transpose(data.astype(object)), 0, label, axis = 1)
 
 def _generate_random_rgb_color():
     """Generates a random RGB color as a tuple (r, g, b) with values between 0 and 1."""

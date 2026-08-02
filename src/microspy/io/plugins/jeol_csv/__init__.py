@@ -1,4 +1,6 @@
-# This file is part of microspy.
+# Copyright 2026 The microspy developers
+#
+# This file is part of kikuchipy.
 #
 # microspy is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,25 +14,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
+#
 
-from .io._io import load
-from . import (
-    signals,
-    data,
-    draw,
-    misc,
-    selection,
-)
+import lazy_loader
 
-# Define the public API of the module
-__all__ = [
-    # Functions
-    "load",
+__getattr__, __dir__, __all__ = lazy_loader.attach_stub(__name__, __file__)
 
-    # Modules
-    "signals",
-    "data",
-    "draw",
-    "misc",
-    "selection",
-]
+del lazy_loader

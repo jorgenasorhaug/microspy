@@ -18,8 +18,20 @@
 #
 
 def replace_none(obj : dict | list | tuple | None):
-    """Replace None values from dictionaries, lists, typles, 
-    or just None with empty strings"""
+    """Looping function to replace None values from dictionaries, 
+    lists, tuples, or just None with empty strings.
+    
+    Parameters
+    ----------
+    obj
+        Object to replace None values with empty strings.
+        
+        Allowed object types:
+        * dict
+        * list
+        * tuple
+        * None -> ""
+    """
     if isinstance(obj, dict):
         return {k: replace_none(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -33,14 +45,16 @@ def _string2listWithStrings(
     string : str,
     **kwargs
 ) -> list:
-    """Convert a string to a list where each elements is separated by marker
+    """Convert a string to a list of strings where each elements is separated 
+    by a marker.
     
     Parameters
     ----------
     string
         string to convert to list with elements
-    **kwargs
-        marker separating each elements. If None, "|" is used
+    kwargs
+        Keyword argument taking "marker" separating each elements. 
+        If None, "|" is used.
 
     Returns
     -------
@@ -71,8 +85,9 @@ def _listWithStrings2string(
     ----------
     List
         List of strings
-    **kwargs
-        marker separating each elements. If None, "|" is used.
+    kwargs
+        Keyword arguments. Takes keyword "marker" and a string value that
+        will separate each element in the list. If None, "|" is used.
 
     Returns
     -------
