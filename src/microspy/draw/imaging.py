@@ -271,9 +271,9 @@ def label2rgb(
     
     elif colours is None:
         from ._colouring import DEFAULT_COLOURS
-        colours = DEFAULT_COLOURS
+        _colours = DEFAULT_COLOURS
         
-        if len(colours) < num_labels:
+        if len(_colours) < num_labels:
             exceptions.InputError(
                 "The colours must be set to return a coloured label map."
             )
