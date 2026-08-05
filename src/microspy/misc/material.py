@@ -154,8 +154,8 @@ elements = _load_elements_data()
 ELEMENTS = list(elements.keys())
 ELEMENTS.sort()
 
-elements_db = DictionaryTreeBrowser(elements)
-elements_db.__doc__ = """
+element_database = DictionaryTreeBrowser(elements)
+element_database.__doc__ = """
 Database of element properties.
 
 The following properties are included:
@@ -205,7 +205,7 @@ def _weight_to_atomic(
     """
     atomic_weights = np.array(
         [
-            elements_db[element]["General_properties"]["atomic_weight"]
+            element_database[element]["General_properties"]["atomic_weight"]
             for element in elements
         ]
     )
@@ -291,7 +291,7 @@ def _atomic_to_weight(
     
     atomic_weights = np.array(
         [
-            elements_db[element]["General_properties"]["atomic_weight"]
+            element_database[element]["General_properties"]["atomic_weight"]
             for element in elements
         ]
     )
