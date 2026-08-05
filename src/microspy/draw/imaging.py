@@ -290,7 +290,7 @@ def label2rgb(
                    f"({underlay_image.shape}\u2260{label_map.shape})."
                 )
     
-    col_rgb = [to_rgb(col) for col in _colours]
+    col_rgb = [to_rgb(col) for col in _colours[:num_labels]]
     
     coloured_map = label2rgb(
         label = label_map, 
