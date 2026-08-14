@@ -407,7 +407,8 @@ def microspySignals2dict(
         Dictionary with particle analysis information.
     """
 
-    if not isinstance(signal, ParticleAnalysis):
+    if not (isinstance(signal, ParticleAnalysis) 
+        or signal is ParticleAnalysis):
         raise TypeError(f"Signal type {type(signal)} is not supported.")
     
     if dictionary is None: 
