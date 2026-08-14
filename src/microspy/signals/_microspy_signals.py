@@ -859,7 +859,7 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
                 from tabulate import tabulate
                 exceptions.formatted_warning(
                     "The threshold value(s) for "
-                    f"'{np.asarray(elements)[np.asarray(threshold) == 0]}'. "
+                    f"'{np.asarray(elements)[np.asarray(threshold) == 0]}' "
                     "is '0'. The minimum concentration will not change. "
                 )
             
