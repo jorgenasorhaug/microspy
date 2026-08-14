@@ -1222,7 +1222,8 @@ class ParticleAnalysis:
         ) + 1 # include the matrix
 
         if colours is None: # Get default colours
-            from microspy.draw._colouring import DEFAULT_COLORS as colours
+            from microspy.draw import _colouring
+            colours = _colouring.DEFAULT_COLOURS
         
         num_colours = len(colours)
 
