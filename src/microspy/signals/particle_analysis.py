@@ -1170,22 +1170,22 @@ class ParticleAnalysis:
                 ":func:'map_particles'"
             )
         
-        if not (self.is_classified == False).all():
+        if (self.is_classified == False).all():
             # Particles have been classified:
-            if not self.Images.phase_maps_updated:
-                self.Images.set_phase_maps(
-                    classes = self.particle_classes,
-                    background_label = bkgr_label,
-                    **{"acquisition_order" : self.metadata.get_item(
-                        "Sample.acquisition_order"),
-                        "vendor" : self.metadata.get_item(
-                            "Acquisition_instrument.vendor"
-                        )
-                    }
-                )
-        else:
             exceptions.formatted_warning(
                 "All particles are 'Unclassified'."
+            )
+            
+        if not self.Images.phase_maps_updated:
+            self.Images.set_phase_maps(
+                classes = self.particle_classes,
+                background_label = bkgr_label,
+                **{"acquisition_order" : self.metadata.get_item(
+                    "Sample.acquisition_order"),
+                    "vendor" : self.metadata.get_item(
+                        "Acquisition_instrument.vendor"
+                    )
+                }
             )
             
     def plot(
