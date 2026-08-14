@@ -853,28 +853,19 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
             # Set the thresholds:
             _threshold = np.zeros_like(template, dtype = float)
             _threshold[template] = threshold
-            threshold = _threshold
             
             # Raise a warning if a zero-valued threshold is detected:
             if (_threshold[template] == 0.0).any():
                 from tabulate import tabulate
                 exceptions.formatted_warning(
-                    "A zero-valued threshold has been detected among the "
-                    "elements:"
-                )
-                print(
-                    tabulate(
-                        tabular_data = _threshold[
-                            template
-                        ].reshape(1,num_elements),
-                        headers = elements,
-                        tablefmt = "outline"
-                    )
+                    "The threshold value(s) for "
+                    f"'{np.asarray(elements)[np.asarray(threshold) == 0]}'. "
+                    "is '0'. The minimum concentration will not change. "
                 )
             
         # Set thresholds:
         super().threshold_data(
-            threshold = threshold
+            threshold = _threshold
         )
         # Update the chemical compositions.
         self._update_concentration(**kwargs)
