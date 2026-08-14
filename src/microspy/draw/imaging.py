@@ -231,9 +231,15 @@ def label2rgb(
         
     elif isinstance(colours, dict):
         # Check if all keys are integers:
-        allKeys_int = True if any(
-            x.is_integer() for x in colours.keys()
-        ) else False
+        try:
+            allKeys_int = True if any(
+                x.is_integer() for x in colours.keys()
+            ) else False
+        except AttributeError:
+            keytype = type(list(colours.keys())[0])
+            raise exceptions.InputError(
+                f"Colour key argument must be an integer, not '{keytype}'"
+            )
         
         if not allKeys_int:
             raise exceptions.InputError(
