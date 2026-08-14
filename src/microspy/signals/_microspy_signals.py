@@ -1757,11 +1757,23 @@ class Images:
             raise AttributeError("The signal class does not keep "
                                 "track of acqiusition images. "
                                 "See :func:'Images.setParentSig'.")
-
-        if self.is_gridified:
-            print("The signal is already gridified.")
         
+        gridify = False
+        if self.is_gridified:
+            _nav_shape = self.ParentSig.axes_manager.navigation_shape[::-1]
+            if nav_shape != _nav_shape:
+                ans = input("The signal is already gridified. Regridify? ([y]/n)")
+                if ans.lower() in ("", "y", "yes"):
+                    gridify = True
+                    self.degridify_ParentSig(
+                        flip_axes = flip_axes
+                    )
+            else:
+                print(f"The signal is already gridified to shape {nav_shape}.")
         else:    
+            gridify = True
+            
+        if gridify:
             # Iterate through all the MicroSpySignals2D_Parent
             for attr, value in self.__dict__.items():
                 if isinstance(value, MicroSpySignal2D_Parent):
@@ -1770,19 +1782,19 @@ class Images:
                         flip_axis = flip_axes
                     )
                     
-        # Update calibration:
-        if self.is_calibrated:
-            self.calibrate_signals(
-                scale = self.navigation_scale,
-                unit = self.navigation_unit
-            )
+            # Update calibration:
+            if self.is_calibrated:
+                self.calibrate_signals(
+                    scale = self.navigation_scale,
+                    unit = self.navigation_unit
+                )
 
-        if len(self._phase_maps) > 0:
-            #print("Gridifying phase maps.")
-            self._gridify_phase_maps(
-                grid_shape = nav_shape,
-                flip_axis = flip_axes
-            )
+            if len(self._phase_maps) > 0:
+                #print("Gridifying phase maps.")
+                self._gridify_phase_maps(
+                    grid_shape = nav_shape,
+                    flip_axis = flip_axes
+                )
         
     def degridify_ParentSig(
         self,
