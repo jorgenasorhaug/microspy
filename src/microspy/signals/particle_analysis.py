@@ -1232,14 +1232,9 @@ class ParticleAnalysis:
             colours = generate_unique_rgb_colors(num_classes)
     
         # Set colours as a list of colours
-        if isinstance(colours, dict):
-            _colours = [colours[pclass] for pclass in colours.keys()]
-        else: 
+        if not isinstance(colours, dict):
             _colours = colours
         
-        # colours to rgb values
-        from matplotlib.colors import to_rgb
-        colours_rgb = [to_rgb(c) for c in _colours][:num_classes-1]
         
         if kwargs.get("background_label") is None:
             __attr = getattr(self.Images, list(Images_signals.keys())[3])
@@ -1257,6 +1252,13 @@ class ParticleAnalysis:
         classes, PM = self.Images.get_phase_map(
             bkgr_label = bkgr_label,
         )
+        
+        if isinstance(colours, dict):
+            _colours = [colours[phase] for phase in classes.keys()]
+            
+        # colours to rgb values
+        from matplotlib.colors import to_rgb
+        colours_rgb = [to_rgb(c) for c in _colours][:num_classes-1]
         
         # Create a ListedColormap
         from matplotlib.colors import ListedColormap, Normalize
