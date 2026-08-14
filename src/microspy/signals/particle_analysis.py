@@ -526,6 +526,7 @@ class ParticleAnalysis:
                             "and will be removed from the list."
                         )
                 for elem in diff:
+                    threshold.remove(threshold[elements.index(elem)])
                     elements.remove(elem)
             
             old_shape = self.Chemistry.data.shape
