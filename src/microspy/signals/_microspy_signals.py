@@ -862,7 +862,7 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
                     f"'{np.asarray(elements)[np.asarray(threshold) == 0]}' "
                     "is '0'. The minimum concentration will not change. "
                 )
-            
+        else: _threshold = threshold
         # Set thresholds:
         super().threshold_data(
             threshold = _threshold
