@@ -1479,8 +1479,8 @@ class Images:
             flip_axes = _vendor2ImFlipAxes(vendor)
             
             # Degridify to simplify the mapping
-            gridify = True
             grid_shape = self.ParentSig.axes_manager.navigation_shape[::-1]
+            gridify = True if len(grid_shape) > 1 else False
             self.degridify_ParentSig(flip_axes = flip_axes)
 
         __attr = getattr(self, list(Images_signals.keys())[3])
