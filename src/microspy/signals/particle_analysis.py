@@ -523,7 +523,7 @@ class ParticleAnalysis:
                 if len(diff) > 0:
                     exceptions.formatted_warning(
                             f"Element(s) '{list(diff)}' has/have not been detected "
-                            "and will be removed from the list."
+                            "and will not be considered."
                         )
                 for elem in diff:
                     threshold.remove(threshold[elements.index(elem)])
@@ -1187,6 +1187,7 @@ class ParticleAnalysis:
                     )
                 }
             )
+            
             
     def plot(
         self,
