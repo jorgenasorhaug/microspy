@@ -40,7 +40,6 @@ image_extension = ["png", "bmp","bmp"] # Composite, Parent and Child signal ext.
 
 def file_reader(
     folder : str | Path,
-    #read_particle_images : bool = True,
     **kwargs
 ) -> list:
     """Read images from Jeol's particle analysis.
@@ -86,38 +85,42 @@ def file_reader(
             
             subdir = Path(os.path.join(folder, _subdir))
 
-            patched_im = _load_patch_image(
-                path = subdir,
-                image_extension = image_extension[0],
-                set_dtype = set_dtype
-            )
+            if kwargs.get("read_CompositeSig"):
+            
+                patched_im = _load_patch_image(
+                    path = subdir,
+                    image_extension = image_extension[0],
+                    set_dtype = set_dtype
+                )
+            else: 
+                patched_im = np.asarray([])
 
             view_images = _load_view_images(
                 path = subdir,
                 image_extension = image_extension[1],
                 set_dtype = set_dtype
             )
+                
+            _, folders = get_subdirectories(
+                path = subdir,
+                keyword = image_keyword
+            )
         
-            if kwargs.get("read_particle_images") is True:
-                
-                _, folders = get_subdirectories(
-                    path = subdir,
-                    keyword = image_keyword
-                )
+            folders = np.sort(folders)
             
-                folders = np.sort(folders)
+            centre_particle_images = kwargs.get(
+                "centre_particle_images"
+            ) 
+            if centre_particle_images is None:
+                centre_particle_images = True
 
-                particle_images = _load_particle_images(
-                    path = subdir,
-                    folders = folders,
-                    image_extension = image_extension[2],
-                    set_dtype = set_dtype,
-                    centre_particle_images = kwargs.get(
-                        "centre_particle_images"
-                    )
-                )
-                
-            else: particle_images = []
+            particle_images = _load_particle_images(
+                path = subdir,
+                folders = folders,
+                image_extension = image_extension[2],
+                set_dtype = set_dtype,
+                centre_particle_images = centre_particle_images
+            )
 
             out.append(
                 [patched_im, 
@@ -298,19 +301,19 @@ def _load_particle_images(
     particle_images
         Particle images
     """
-    from ._utils import _estimate_number_of_particles_based_on_folders
 
     path = Path(path)
 
     # Total number of particle images:
     if num_images == None:
+        from ._utils import _estimate_number_of_particles_based_on_folders
         num_images = _estimate_number_of_particles_based_on_folders(
             path = path,
             folders = folders
         )
     
-    # Since we don't know the common shape of the particle 
-    # images, we need to start with one
+    # Since we don't know the common shape of the particle images, we need 
+    # to start with one
     first = True
 
     # Image indexer
