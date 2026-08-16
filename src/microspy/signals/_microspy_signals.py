@@ -484,10 +484,6 @@ class MicroSpySignal1D_Chemistry(MicroSpySignal1D):
         """Text
         """
         super()._check_for_empty_data_columns()
-        self.metadata.set_item(
-            item_path = "Sample.elements",
-            value = self.metadata.get_item("Signal.props")
-        )
 
     # ---------------------------------------------------------------- #
     # ------------------------- Open methods ------------------------- #
