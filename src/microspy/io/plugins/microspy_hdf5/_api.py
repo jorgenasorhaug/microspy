@@ -144,7 +144,9 @@ def dict2microspyList(dictionary : dict) -> list:
             "Acquisition_order"
             )
     }
-    del md["Acquisition_order"]
+    
+    if md.get("Acquisition_order") is not None:
+        del md["Acquisition_order"]
     
     # Temporarily get 1D signals (unnecessary conversion...)
     signals = dict2ListOfMicroSpySignal1D(
@@ -406,7 +408,7 @@ def microspySignals2dict(
     dictionary
         Dictionary with particle analysis information.
     """
-
+    
     if not (isinstance(signal, ParticleAnalysis) 
         or signal is ParticleAnalysis):
         raise TypeError(f"Signal type {type(signal)} is not supported.")
