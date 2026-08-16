@@ -240,7 +240,6 @@ def label2rgb(
             raise exceptions.InputError(
                 f"Colour key argument must be an integer, not '{keytype}'"
             )
-        
         if not allKeys_int:
             raise exceptions.InputError(
                     "All colour keys must be integers representing the labels."
