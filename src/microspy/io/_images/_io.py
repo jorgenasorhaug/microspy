@@ -57,7 +57,9 @@ def load_images(
     **kwargs
 ) -> list:
     """Load the the stitched overview image, the individual view images, and 
-    the particle images acquired during particle analysis.  
+    the particle images acquired during particle analysis. 
+    
+    The patched image is optional.
 
     Parameters
     ----------

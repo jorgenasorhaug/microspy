@@ -369,7 +369,8 @@ def _load_particle_images(
                 )
 
                 pad_width *= (pad_width > 0)
-                # pad the array if the new image is larger | (n_before, n_after)
+                # pad the array if the new image is larger | (n_before, 
+                # n_after)
                 if pad_width.sum() > 0: 
                     particle_images = np.pad(
                         particle_images,
