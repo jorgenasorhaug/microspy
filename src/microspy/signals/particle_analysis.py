@@ -119,7 +119,6 @@ class ParticleAnalysis:
         
         # Assign signals as attributes
         for enum, signal in enumerate(signals):
-            
             signal_type = signal.metadata.get_item("Signal.signal_type")
             
             if signal_type is None:
@@ -145,8 +144,8 @@ class ParticleAnalysis:
 
         # Define unclassified keyword:
         Unclassified_kw = kwargs.get(
-                'Unclassified_kw'
-            ) if 'Unclassified_kw' in kwargs else "Unclassified" 
+            'Unclassified_kw'
+        ) if 'Unclassified_kw' in kwargs else "Unclassified" 
             
         # Set particle classes
         classes = deepcopy(signals[0].metadata.get_item("Sample.classes"))
@@ -314,10 +313,11 @@ class ParticleAnalysis:
             needed as all signals are usually allocated the same metadata
             except for the signal type.
         """
-        
+        from hyperspy.misc.utils import DictionaryTreeBrowser
         from copy import deepcopy
         
         if metadata_stored_in_signal_type is None:
+            # Use the first signal.
             signal_index = 0
         else:
             signal_index = -1
@@ -336,38 +336,35 @@ class ParticleAnalysis:
         self._metadata = deepcopy(signals[signal_index]._metadata)
         md = self.metadata
 
-        # Define Signals node
+        # Replace Signal node with Signals
         del md.Signal
         md.add_node('Signals')
 
-        # Store additional data as a new node
-        #if hasattr(md, 'Additional_data'):
-        #    self._additional_data = md.Additional_data
-
-        # Iterate through the signals and let all point to this class' 
-        # metadata, except from the Signal node.
+        # Iterate through the signals and remove unimportant metadata
         for sig in signals:
+            
+            sig._original_metadata = deepcopy(sig.metadata)
 
-            # Get signal type and delete it from the attribute
+            # Get signal type 
             sig_type = sig.metadata.get_item("Signal.signal_type")
-            #del sig.metadata.Signal.signal_type
 
             # Define Signals instead of Signal
             md.set_item(
                 f'Signals.{sig_type}', 
                 deepcopy(sig.metadata.get_item("Signal"))
             )
-
-            # Set the attribute signal metadata to reference the class' 
-            # metadata
-            smd = sig.metadata
-            if hasattr(smd, 'Additional_data'):
-                del smd.Additional_data
-                
-            smd.Acquisition_instrument = md.get_item("Acquisition_instrument")
-            smd.General = md.get_item("General")
-            #smd.Original_metadata = md.Original_metadata
-            smd.Sample = md.get_item("Sample")
+            
+        
+            sig._metadata = DictionaryTreeBrowser(
+                {
+                    "General" : {
+                        "title" : ""
+                    },
+                    "Signal" : sig.metadata.get_item(
+                        "Signal"
+                    ).as_dictionary(),
+                }
+            )
 
     def _set_original_classes(
         self,
