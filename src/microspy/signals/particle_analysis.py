@@ -268,7 +268,7 @@ class ParticleAnalysis:
     def elements(self) -> list:
         """Return a list of the quantified elements.
         """
-        return self.Chemistry.metadata.get_item("Signal.props")
+        return self.Chemistry.elements
     
     @property
     def num_particles(self) -> int:
@@ -543,10 +543,6 @@ class ParticleAnalysis:
                 self.metadata.set_item(
                     "Signals.Chemistry",
                     self.Chemistry.metadata.get_item("Signal")
-                )
-                self.metadata.set_item(
-                    "Sample.elements",
-                    self.Chemistry.metadata.get_item("Sample.elements")
                 )
             
     def filter_by_elements(

@@ -479,7 +479,35 @@ def guess_ParentSig_navigation_grid_shape(
     
     return rows, cols, candidates
 
+def values_change_after_dtype_change(
+    arr : np.ndarray,
+    new_dtype
+) -> bool:
+    """ Check if array values change after casting to a new dtype.
 
+    Parameters
+    ----------
+    arr
+        Input array
+    new_dtype
+        Target dtype (e.g., np.float32, np.int32)
+
+    Returns
+    -------
+    True if values change, otherwise False
+    """
+    original = np.array(arr)
+    
+    try:
+        converted = original.astype(new_dtype)
+    except Exception as e:
+        raise ValueError(f"Failed to convert dtype: {e}")
+    
+    # Compare: use allclose for float safety, exact comparison otherwise
+    if np.issubdtype(original.dtype, np.floating) or np.issubdtype(new_dtype, np.floating):
+        return not np.allclose(original, converted)
+    else:
+        return not np.array_equal(original, converted)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #%%%%%%%%%%%%%%%%%%%%%%%%% KEEP OR DELETE FUNCTIONS? %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -967,7 +967,10 @@ class MicroSpySignal2D(Signal2D):
             # The images are rectangular -> cannot set a scale along unknown
             # direction.
             if self.axes_manager[-2].size != self.axes_manager[-1].size:
-                warnings.warn("Unable to calibrate the rectangular signal.")
+                warnings.warn(
+                    "Unable to calibrate rectangular and ungridified parent "
+                    "signal(s)."
+                )
             else:
                 cal = scale * self.axes_manager[-1].size
                 self.axes_manager[0].scale = cal
