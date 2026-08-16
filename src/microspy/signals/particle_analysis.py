@@ -353,7 +353,6 @@ class ParticleAnalysis:
                 f'Signals.{sig_type}', 
                 deepcopy(sig.metadata.get_item("Signal"))
             )
-            
         
             sig._metadata = DictionaryTreeBrowser(
                 {
@@ -537,9 +536,6 @@ class ParticleAnalysis:
             # If elements have been removed, i.e. Chemistry's data shape 
             # is changed, update the class' metadata
             if self.Chemistry.data.shape != old_shape:
-                exceptions.formatted_warning(
-                    "Future fix: :func:'_create_and_reorganise_metadata'"
-                )
                 self.metadata.set_item(
                     "Signals.Chemistry",
                     self.Chemistry.metadata.get_item("Signal")

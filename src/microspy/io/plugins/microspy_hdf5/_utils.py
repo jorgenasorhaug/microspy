@@ -17,6 +17,15 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
+# For special characters:
+REPLACEMENTS = {
+    0x00B5: "u",     # µ (MICRO SIGN)
+    0x03BC: "u",     # μ (GREEK SMALL LETTER MU)
+    0x00B2: "^2",    # ²
+    0x00B3: "^3",    # ³
+    0x00D7: "x",     # ×
+}
+
 def replace_none(obj : dict | list | tuple | None):
     """Looping function to replace None values from dictionaries, 
     lists, tuples, or just None with empty strings.
@@ -107,3 +116,14 @@ def _listWithStrings2string(
 
     # Ignore the first inserted marker
     return string[1:]
+    
+def sanitize(text : str):
+    """Replace special characters with replacement lookup table.
+    """
+    result = []
+
+    for c in text:
+        replacement = REPLACEMENTS.get(ord(c))
+        result.append(replacement if replacement is not None else c)
+
+    return "".join(result)
