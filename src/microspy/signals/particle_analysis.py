@@ -265,10 +265,10 @@ class ParticleAnalysis:
         return self._particle_classes
         
     @property
-    def elements(self) -> np.ndarray:
-        """Return the list of elements stored in the class' metadata.
+    def elements(self) -> list:
+        """Return a list of the quantified elements.
         """
-        return self.metadata.get_item("Sample.elements")
+        return self.Chemistry.metadata.get_item("Signal.props")
     
     @property
     def num_particles(self) -> int:

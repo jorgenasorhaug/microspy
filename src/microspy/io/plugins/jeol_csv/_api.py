@@ -31,6 +31,8 @@ from microspy.io._utils import(
     _identify_filenames_of_interest,
 )
 
+MANUFACTURER : str = "Jeol"
+
 def file_reader(filename : str | Path):
     """Read particle analysis data from a csv file using pandas dataframe.
 
@@ -71,29 +73,19 @@ def file_reader(filename : str | Path):
     # Get the particle data stored in the dataframe
     data, additional_data = _get_acquisition_data_from_file(file)
 
-    # Read the total number of investigated particles
-    num_particles = mdv[mdk == "Summary"]
-    if isinstance(num_particles, np.ndarray):
-        num_particles = num_particles[0]
-
-    #stubs = np.where(mdk == 'Stub name')[0][1:]
-
     # Update metadata
     md.update(
         {
             "General" : {
                 "original_filename" : filename,
                 "title" : pname,
-                "manufacturer" : "Jeol"
+                "manufacturer" : MANUFACTURER
             },
             "Sample" : {
-                "elements" : data["chemistry"]["props"],
-                "particles" : num_particles,
                 "classes" : additional_data["classification"],
             },
             "Acquisition_instrument" : {
-                "vendor" : "Jeol",
-                #'Stubs' : mdv[stubs]
+                "vendor" : MANUFACTURER,
             },
             "Additional_data" : additional_data
         }
@@ -177,11 +169,11 @@ def _get_acquisition_data_from_file(
         
         keys structure:
         ├── chemistry/
-        │   ├── elements
+        │   ├── props # i.e. elements
         │   ├── data (n,m) 
         │   └── units
         └── geometry/
-            ├── prop
+            ├── props
             ├── data (n,o) 
             └── units
             
@@ -261,8 +253,7 @@ def _get_acquisition_data_from_file(
         union = set(re.sub(pattern, '',p).lower().split()) & set(geometric_keywords)
         if len(union) > 0:
             instance.append(idx)
-            if '[' in p.split()[-1]: 
-                units.append(p.split()[-1])
+            if '[' in p.split()[-1]: units.append(p.split()[-1])
             else: units.append('')
             prop.append(p)
 
@@ -299,12 +290,13 @@ def _get_acquisition_data_from_file(
     # The remaining data is returned as additional data
     additional_data = {
         'keywords' : headers,
-        'data' : np.asarray(pd.concat([file[df] for df in headers], axis = 1)),
+        'data' : np.asarray(
+            pd.concat([file[df] for df in headers], axis = 1)
+        ),
         'classification' : classes
     }
 
     return data, additional_data
-
     
 def _get_metadata_from_jeol_csv_file(
     file : pd.core.frame.DataFrame

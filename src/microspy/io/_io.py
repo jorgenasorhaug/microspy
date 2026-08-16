@@ -149,11 +149,11 @@ def _dict2signals(
     │   └── ...
     ├── axes/ 
     ├── signal_type/ (e.g. chemistry) 
-    │   ├── elements
+    │   ├── props # i.e. a list of quantified elements
     │   ├── data (n,m)
     │   └── unit
     └── signal_type/ (e.g. geometry)
-        ├── prop
+        ├── props
         ├── data (n,o) 
         └── units
 
@@ -176,8 +176,6 @@ def _dict2signals(
     md = signal_dict['metadata'] if "metadata" in signal_dict else {}
     omd = signal_dict['original_metadata'] if 'original_metadata' in signal_dict else {}
         
-    #if set_additional_data and 'additional_data' in signal_dict:
-    #    add_data = signal_dict['additional_data']
     if 'axes' in signal_dict:
         axes = signal_dict['axes']
 
@@ -198,8 +196,8 @@ def _dict2signals(
         
         # Set metadata
         out[-1].metadata.add_dictionary(md)
-        out[-1].metadata.set_item("Original_metadata", omd)
-        #out[-1].metadata.set_item("Additional_data", add_data)
+        if omd:
+            out[-1].metadata.set_item("Original_metadata", omd)
 
     return out
     
