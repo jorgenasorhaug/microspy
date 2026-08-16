@@ -17,7 +17,13 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-from ._misc import GREEK_LETTERS, tabulate_data, save_tabulate_data
+from ._misc import (
+    GREEK_LETTERS, 
+    tabulate_data, 
+    save_tabulate_data,
+    guess_ParentSig_navigation_grid_shape
+)
+
 from .material import (
     weight_to_atomic, 
     atomic_to_weight, 

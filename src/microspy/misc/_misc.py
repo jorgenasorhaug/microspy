@@ -359,187 +359,130 @@ def _get_table(
     )
     return np.insert(_data.astype(object), obj = 0, values = labels, axis = 1)
 
-
-
-
-
-
-
-
-
-
-
-
-    
-
-    
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%% IMAGE MANIPULATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-def stitch_rgb_phase_map(phase_map, nav_shape):
-    """Stitch a 4D or 5D array with 3 rgb channels into a single image of shape 3: (x,y,channels).
+def _get_prime_numbers(
+    N : int
+) -> list:
+    """Factorise N and return the prime numbers.
 
     Parameters
     ----------
+    N 
+        Integer to factorise
 
     Returns
     -------
-    
-    Example
-    -------
+    prime_factors
+        List of prime numbers
     """
-    if not _errors._check_for_numpy_ndarray(phase_map): raise TypeError('Provided phase map must be a numpy ndarray')
-
-    if len(nav_shape) != 2: raise ValueError(f"Provided navigation shape {nav_shape} is not valid.")
+    from sympy import factorint
     
-    phase_map_s = phase_map.copy()
-
-    # 20*20 != 20
-    if np.prod(nav_shape) == np.prod(phase_map.shape[:2]) and len(phase_map) > 4: 
-
-        phase_map_s = _image_utils._image_utils._gridify_ND_array_to_nD(phase_map_s)
-
-    return _image_utils._stitch_images(phase_map_s, shape = nav_shape)
+    primes = factorint(N)
+    prime_factors = []
     
-# def gridify_3D_array_to_4D(arr, nav_shape):
-    # """Gridify the 3D array to 4D. Nav_shape defines the number of images in the different directions.
+    for key, val in primes.items():
+        for i in range(val):
+            prime_factors.append(key)
+            
+    return prime_factors
 
-    # Parameters
-    # ----------
-    # arr
-        # numpy.ndarray of shape (3,)
-    # nav_shape
-        # Navigation shape to shape the array into
+def _map_factor_pairs(
+    prime_factors : list | tuple
+) -> set[tuple, ...]:
+    """Generate all unique factor pairs (a, b), (b, a) from a list of 
+    prime factors.
 
-    # Example
-    # ------
-    # >>> import particle_analysis as pa
-    # >>> import numpy as np
-    # >>> img = np.asarray([[[0]*4]*4]*4)
-    # >>> img.shape
-    # (4,4,4)
-    # >>> img = pa.gridify_3D_array_to_4D(arr, nav_shape = (2,2))
-    # >>> img.shape
-    # (2,2,4,4)
-    # """
-    # if len(arr.shape) != 3: raise TypeError(f"Array shape {arr.shape} is not expected.")
-
-    # if len(nav_shape) != 2: raise TypeError(f"Navigation shape is not valid. Provide a 2-integer list")
-
-    # return _image_utils._gridify_3D_array_to_4D(arr, nav_shape + arr.shape[-2:])
-    
-def greyscale_to_rgba(grey_image, dtype_out = np.float16):
-    """Return a grey-scale array as a rgb equivalent
-    
     Parameters
     ----------
-    grey_image
-        2D grey scale image array 
+    prime_factors
+        List of prime factors.
+    pairs
+        A set of pairs.
 
     Returns
     -------
-        2D image array with RGBA channels (RGB is normalised to be in the range 0,1)
+    pairs
+        set of unique factor pairs.
     """
-    fac = np.max(grey_image)
+    from math import prod
+    from itertools import combinations
     
-    if not _errors._check_for_numpy_ndarray(grey_image): raise TypeError(f"Input image is not a grey scale.")
-    
-    img = np.expand_dims(grey_image, axis = -1).astype(dtype_out)
-    
-    return np.concatenate((img / fac, img / fac, img / fac,
-                           np.full_like(img, 1)), # alpha channel
-                           axis = -1)
+    N = prod(prime_factors)
+    pairs = set()
 
-def greyscale_to_rgb(grey_image, 
-                     in_range=(0, 255),
-                     dtype_out = np.float16):
-    """Return a grey-scale array as a normalised rgb equivalent (intensity range: 0,1)
-    
+    n = len(prime_factors)
+
+    for r in range(n + 1):
+        for idx in combinations(range(n), r):
+
+            a = prod(prime_factors[i] for i in idx)
+            b = N // a
+
+            pairs.add(tuple((a, b)))
+            pairs.add(tuple((b, a)))
+
+    return pairs
+
+def guess_ParentSig_navigation_grid_shape(
+    n_images : int, 
+    image_width : int | float,
+    image_height : int | float,
+    stitched_image_width : int | float, 
+    stitched_image_height : int | float
+) -> [int, int, list]:
+    """The function maps potential grid shapes that fits the number of
+    images, image width and height, and the 
+
+    The function does not take overlap between images into consideration.
+
     Parameters
     ----------
-    grey_image
-        2D grey scale image array 
-    in_range
-        tuple of in range intensity values that is givne to the rescale_intensity function
-    dtype_out
-        Datatype to return            
+    n_images
+        Total number of images
+    image_width, image_height
+        Width, height of the image
+    tot_area_width, tot_area_height
+        Total width and height if the images were correctly stitched together.
 
     Returns
     -------
-        2D image array with RGBA channels (RGB is normalised to be in the range 0,1)
+    rows, cols
+        The best row, col match
+    candidates
+        All tested candidates and corr. scores determined by the ratio between tested 
+        grid shape area and the actual area.
     """
-            
-    if not _errors._check_for_numpy_ndarray(grey_image): raise TypeError(f"Input image is not a grey scale.")
     
-    from skimage import color
-    from skimage.exposure import rescale_intensity
-
-    grey_im = color.gray2rgb(grey_image) # Intensity values unchanged
+    expected_ratio = stitched_image_width / stitched_image_height
     
-    return (rescale_intensity(1.0 * grey_im, in_range = in_range)).astype(np.float32)
+    # Pairs of prime numbers:
+    factor_pairs = _map_factor_pairs(
+        _get_prime_numbers(
+            N = n_images
+        )
+    )
     
-def plot_rgb_map_with_colorbar(array, 
-                               colours, 
-                               background_colour = 'whitesmoke',
-                               return_fig = False):
-    from matplotlib import colors
-    import matplotlib.pyplot as plt
-    
-    auto_colouring  = False
+    candidates = []
 
-    colour_type = type(colours)
+    for row, col in factor_pairs:
+        ratio = (col * image_width) / (row * image_height)
 
-    num_colors = len(colours)
-    
-    if colours is not None: 
-
-        unique_classes = list(colours.keys())
-
-        if colour_type == dict: colours = [colours[cl] for cl in unique_classes]
-
-    else: auto_colouring = True
-
-    # Create a unique color map
-    if auto_colouring: 
-
-        if len(colours) < 11: 
-            
-            print('Colouring according to tableau colors')
-            
-            colours = [col for col in list(colors.TABLEAU_COLORS.keys())[:len(unique_classes)]]
+        error = ratio / expected_ratio
         
-        else: 
-            
-            print('Generating random colours')
-            # Alternatively, use: colors.CSS4_COLORS
-            colours = [_utils._generate_random_rgb_color() for i in range(len(unique_classes))]
+        candidates.append((error, row, col))
 
-    colours.insert(0, colors.to_rgb(background_colour))
+    scores = np.asarray(candidates)[:,0]
+    best_match = min(
+        range(len(scores)), key=lambda i: abs(scores[i] - 1.0)
+    )
 
-    unique_classes.insert(0, 'Matrix')
+    rows, cols = candidates[best_match][1:]
     
-    phase_vals = np.arange(num_colors + 1)
-    
-    cmap = colors.ListedColormap(colours)
-    
-    norm = colors.BoundaryNorm(np.arange(-0.5, phase_vals.max() + 1.5, 1), cmap.N)
+    return rows, cols, candidates
 
-    # Plotting
-    fig, ax = plt.subplots()
-    cax = ax.imshow(array, cmap = cmap, norm = norm)
-    # Add a colorbar with a label
-    cbar = fig.colorbar(cax, ticks = phase_vals)
-    
-    if colour_type == dict: cbar.ax.set_yticklabels(unique_classes) 
-        
-    plt.axis('off')
-    plt.show()
-
-    if return_fig: return fig
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PARTICLE CHEMISTRY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#%%%%%%%%%%%%%%%%%%%%%%%%% KEEP OR DELETE FUNCTIONS? %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 def plot_data_distribution(data_arr,
                            unit = '',
@@ -556,6 +499,7 @@ def plot_data_distribution(data_arr,
     data_arr
         np.ndarray of shape (N,)
     """
+    
     import matplotlib.pyplot as plt
 
     # --- Temporary change using rc_context() ---
@@ -596,132 +540,6 @@ def plot_data_distribution(data_arr,
 
     if return_fig: return fig
 
-def get_label_colourmap(list_of_colours : list | None = None):
-    """Create a colourmap for labels.
-
-    Parameters
-    ----------
-    list_of_colours
-        List of pyplot colour names
-    num_colours
-        Number of colours in the colourmap
-
-    returns
-    -------
-    colour map
-        A matplotlib.color ListedColormap
-    """
-    return _colouring.get_discrete_colour_map(list_of_colours)
-
-def get_navigator_colours(image):
-    """Create a navigator rgb map
-    """
-    return _colouring.get_rgb_navigator(image)
-
-
-
-
-
-
-
-
-
-
-
-        
-
-#old function name: check_array_compatibility_with_new_datatype
-def values_change_after_dtype_change(
-    arr : np.ndarray,
-    new_dtype
-) -> bool:
-    """ Check if array values change after casting to a new dtype.
-
-    Parameters
-    ----------
-    arr
-        Input array
-    new_dtype
-        Target dtype (e.g., np.float32, np.int32)
-
-    Returns
-    -------
-    True if values change, otherwise False
-    """
-    original = np.array(arr)
-    
-    try:
-        converted = original.astype(new_dtype)
-    except Exception as e:
-        raise ValueError(f"Failed to convert dtype: {e}")
-    
-    # Compare: use allclose for float safety, exact comparison otherwise
-    if np.issubdtype(original.dtype, np.floating) or np.issubdtype(new_dtype, np.floating):
-        return not np.allclose(original, converted)
-    else:
-        return not np.array_equal(original, converted)
-
-def _generate_random_rgb_color():
-    """Generates a random RGB color as a tuple (r, g, b) with values between 0 and 1."""
-    r = random.random()
-    g = random.random()
-    b = random.random()
-    return (r, g, b)
-
-def _template_match_1d(patterns, templates):#, num_particles):
-    """Match patterns with templates using the normalised cross-correlation.
-
-    Parameters
-    ---------
-    patterns : np.ndarray
-        Patterns to match with the templates. 
-        OBS! patterns.shape[0] is assumed to be the number of patterns.
-    templates : np.ndarray
-        Templates to match the patterns with
-
-    Returns
-    -------
-    ncc : np.ndarray
-        Normalised cross-correlation scores between the patterns and the tempaltes.
-
-    Example
-    -------
-    >>> _template_match(patterns = np.array([[0,2,5,4,3,2], [2,5,9,8,4,6]]), 
-                        templates =  np.array([[0,2,5,4,3,2], [2,5,9,8,4,6]])
-    
-    """
-    from tqdm import tqdm
-
-    ndim_template = len(templates.shape)
-
-    ndim_patterns = len(patterns.shape)
-    
-    if ndim_template == 1: num_templates = 1
-        
-    else: num_templates = len(templates)
-
-    if ndim_patterns == 1: num_pats = 1
-        
-    else: num_pats = len(patterns)#num_particles
-
-    matches = np.zeros((num_pats, num_templates))
-
-    for i in tqdm(range(num_templates)):
-        
-        if ndim_template > 1: tmpl = np.nan_to_num(templates[i])
-
-        else: tmpl = np.nan_to_num(templates)
-        
-        for j in range(num_pats): 
-
-            if ndim_patterns > 1: pat = np.nan_to_num(patterns[j])
-
-            else: pat = np.nan_to_num(patterns)
-            
-            matches[j] = ncc(pat, tmpl)
-    
-    return matches
-
 def _create_dummy_eds_signal(elements, Erange = 20., steps = 0.02, weight = None, return_model = False):
     """Create a dummy EDS signal based on element peaks from elements in elements list
 
@@ -757,9 +575,6 @@ def _create_dummy_eds_signal(elements, Erange = 20., steps = 0.02, weight = None
 
     lines = []
 
-    # To correctly display a nested loop ...
-    # https://stackoverflow.com/questions/56953040/resetting-tqdm-progress-bar/58657862#58657862
-    # https://github.com/tqdm/tqdm/issues/1023
     it1 = tqdm(elements, leave = True)
     
     for elem in it1:
@@ -927,108 +742,6 @@ def _reshape_artificial_eds_map(array, nav_shape):
     it2.close()
 
     return SIGNAL
-                
-def _check_cropped_particle_class_compatability(classes, clusters):
-    """The function looks for class compatability within the cluster labels (starting at 1). 
-
-    Parameters
-    ---------
-    classes
-        np.array of class names (string)
-    clusters
-        list of np.arrays keeping track of which particle labels are clustered together
-
-    Returns
-    -------
-    updated_clusters
-        list of np.arrayskeeping track of which particle labels are clustered together. However,
-        the list might be updated according to classes found within the cluster.
-
-    Example
-    -------
-    >>> classes 
-    array(['Unclassified', 'Unclassified', 'Type A', 'Type A', 'Type B', 
-           'Type B'], dtype='<U12')
-
-    >>> # The cluster labeles' value corr. to the classes index position [label value - 1]  
-    >>> clusters
-    [array([1, 2]), array([3, 4, 5, 6])] 
-    
-    >>> _check_cropped_particle_class_compatability(classes, clusters)
-    [array([0, 1]),
-     array([2, 3)], 
-     array([4, 5])]    
-    """
-    
-    updated_clusters = []
-    
-    for clust, cluster_idx in zip(clusters, np.arange(len(clusters))):
-        
-        clust_classes = []
-        
-        for idx in clust: clust_classes.append(classes[idx-1])
-        
-        clust_classes = np.array(clust_classes)
-        
-        if len(np.unique(clust_classes)) == 1: 
-            
-            updated_clusters.append(clusters[cluster_idx])
-        
-        else:
-            
-            for cl in np.unique(clust_classes): updated_clusters.append(clusters[cluster_idx][clust_classes == cl])
-
-    return updated_clusters
-
-def get_number_combinations(array_of_different_numbers):
-    """Return an array of unique number combinations from the argument array
-    """
-    from itertools import combinations
-    
-    return np.array(list(combinations(array_of_different_numbers, 2)))
-
-def norm_data(data):
-    """
-    normalize data to have mean=0 and standard_deviation=1
-    """
-    mean_data=np.mean(data)
-    std_data=np.std(data, ddof=1)
-    #return (data-mean_data)/(std_data*np.sqrt(data.size-1))
-    return (data-mean_data)/(std_data)
-
-
-def ncc(data0, data1):
-    """
-    normalized cross-correlation coefficient between two data sets
-
-    Parameters
-    ----------
-    data0, data1 :  numpy arrays of same size
-    """
-    return (1.0/(data0.size-1)) * np.sum(norm_data(data0)*norm_data(data1))
-
-
-def _identify_missing_labels(current_labels, desired_labels):
-    """Return True if there are incompatibilities between the two input arrays. Return also the missing numbers.
-    """
-    
-    missing_labels = []
-        
-    for i in range(len(current_labels) - 1):
-
-        diff = current_labels[i+1] - current_labels[i]
-        
-        if diff > 1:
-            
-            for j in range(1, diff): 
-                
-                missing_labels.append(current_labels[i]+j)
-
-    if len(missing_labels) > 0:
-        
-        warnings.warn(f"\n{len(missing_labels)} labels have either been missed or removed while mapping particles. The missing labels are {missing_labels}.")
-
-    return missing_labels
 
 def first_nonzero_decimal_position(n):
     """
