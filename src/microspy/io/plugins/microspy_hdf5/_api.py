@@ -606,9 +606,7 @@ def dict2hdf5group(
             continue  # Jump to next item in dictionary
         elif isinstance(val, str):
             # Check for special characters and replace them:
-            print(val)
             val = sanitize(val)
-            print(val)
             ddtype = "S" + str(len(val) + 1)
             val = val.encode()
         elif ddtype == np.dtype("O"):
