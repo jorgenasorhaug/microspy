@@ -21,6 +21,7 @@ from .imaging import (
     stitch_grid_signal, 
     label2rgb,
     get_grid_mask,
+    get_colourbar,
 )
 from ._colouring import (
     DEFAULT_COLOURS,
@@ -32,6 +33,7 @@ __all__ = [
     "stitch_grid_signal", 
     "label2rgb",
     "get_grid_mask",
+    "get_colourbar",
     "DEFAULT_COLOURS",
     "get_discrete_colour_map",
     "Closest_colorname",

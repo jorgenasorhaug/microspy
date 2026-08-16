@@ -333,6 +333,59 @@ def label2rgb(
     
     return result
     
+def get_colourbar(
+    colours : list | tuple | np.ndarray,
+    bg_colour : str | tuple | list | np.ndarray | None = None,
+    labels : list | tuple | np.ndarray | None = None,
+):
+    """Create a "custom" (discrete) colour map colour bar. 
+
+    Returns
+    -------
+    fig
+        matplotlib.pyplot figure.
+    """
+    from matplotlib.patches import Patch
+    from matplotlib.colors import to_rgb
+    from matplotlib import pyplot as plt
+    from copy import deepcopy
+    
+    colors = np.asarray(deepcopy(colours))
+
+    _colours : list = []
+    for c in colors:
+        _colours.append(to_rgb(c))
+        
+    if bg_colour is not None:
+        _labels = np.insert(np.asarray(labels), 0, "Background", axis = 0)
+        _colours.insert(0, to_rgb(bg_colour))
+    else:
+        _labels = deepcopy(labels)
+    
+    handles = [
+        Patch(facecolor=c, edgecolor="none", label=l)
+        for c, l in zip(colors, labels)
+    ]
+    
+    fig, ax = plt.subplots()
+    ax.axis("off")
+    
+    ax.legend(
+        handles=handles,
+        ncol=1,
+        loc="center",
+        frameon=False,
+        handlelength=2.5,
+        handleheight=5,
+        borderpad=0,
+        labelspacing=0,
+        handletextpad=0.8,
+    )
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+    
 def get_grid_mask(
     grid_shape : tuple,
     edge_width : int = 1,
