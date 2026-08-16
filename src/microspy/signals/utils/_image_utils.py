@@ -118,88 +118,6 @@ def _crop_away_empty_edges(
     
     return arr
 
-def _dict2list(
-    dictionary : dict,
-    key_words : list = ["label",
-                        "top_left",
-                        "bottom_right",
-                        "shape"]
-) -> list:
-    """Get dictionary values by argument keywords. Helping function to 
-    :func:'_listOfDicts2listOfLists'.
-
-    Parameters
-    ----------
-    dictionary
-        Dictionary with values to get
-    key_words
-        List of keywords to get the values from the argument
-        dictionary
-
-    Returns
-    -------
-    array
-        array of dictionary values according to the order of the 
-        keywords in key_words
-    """
-
-    #Check if the symmetric difference is empty:
-    diff = set(key_words) ^ set(dictionary.keys())
-                                
-    if not diff:
-
-        array = []
-
-        for key in key_words:
-
-            val = dictionary.get(key)
-
-            if isinstance(val, int | np.integer):
-                array.append(val)
-            elif isinstance(val, list | tuple):
-                array.extend(val)
-            else:
-                raise TypeError(f"dictionary value type ({type(val)}) "
-                                "is not supported.")
-        return array
-    else:
-        raise ValueError("The dictionary keywords and argument key_words "
-                         f"are symmetrically different by {diff}")
-
-def _listOfDicts2listOfLists(
-    list_of_dicts : list(dict),
-    key_words : list = ["label",
-                        "top_left",
-                        "bottom_right",
-                        "shape"]
-) -> list[list, ...]:
-    """Return a list of lists with values from the dictionaries in a list
-    in the same order as the keywords in key_words.
-    
-    A helping function to :func:'_get_crop_rectangles'.
-
-    Parameters
-    ----------
-    list_of_dicts
-        List of dictionaries with expected keys as in key_words
-    key_words
-        keywords to get values from the dictionaries in list_of_dicts
-
-    Returns
-    -------
-    results
-        list of lists containing the values in the order defined by key_words
-    """
-    
-    results = []
-    
-    for d in list_of_dicts:
-        results.append(
-            _dict2list(d, key_words)
-        )
-        
-    return results
-
 def _find_crop_rectangles(
     original_image : np.ndarray,
     cropped_images : list | np.ndarray,
@@ -266,14 +184,10 @@ def _find_crop_rectangles(
 def _get_crop_rectangles(
     original_image : np.ndarray,
     cropped_images : list(np.ndarray),
-    key_words : list = ["label",
-                        "top_left",
-                        "bottom_right",
-                        "shape"],
     use_labels : list | tuple | None = None,
     progressbar : bool = True
 ) -> list:
-    """Identify bounding rectangles where cropped images originate from.
+    """Identify bounding rectangles where cropped images originate from. 
 
     Parameters
     ----------
@@ -291,20 +205,8 @@ def _get_crop_rectangles(
     Returns
     -------
     results
-        List of lists with values
-
-        For example:
-        key_words = ["label",
-                     "top_left",
-                     "bottom_right",
-                     "shape"]
-                     
-         provides the following:
-     
-        results[0] : image label
-        results[1], results[2] : child image upper left coord. 
-        results[3], results[4] : child image bottom right coord.
-        results[5], results[6] : "shape" (child image shape)
+        list of dictionaries with keys representing the individual labels'
+        properties like label, image positions and shape. 
     """
 
     if use_labels is not None:
@@ -320,81 +222,67 @@ def _get_crop_rectangles(
         progressbar = progressbar
     )
     
-    return _listOfDicts2listOfLists(results, key_words)
+    return results
 
-def _create_label_map(
-    image_shape : np.ndarray, 
-    crop_rectangles : list(list),
-    key_words : list = ["label",
-                        "top_left",
-                        "bottom_right",
-                        "shape"],
+def _create_label_map_com(
+    label_image_shape : tuple,
+    crop_rectangles : list[list],
     background_label : int = -1
 ) -> np.ndarray:
-    """
-    Creates a label map of the cropped images. Overlapping label areas 
-    are resolved using center-of-mass distance.
-
+    """Creates a label map of the cropped images. Overlapping label areas 
+    are resolved using center-of-mass distance. 
+    
+    Not meant to be used directly.
+    
+    See :func:'_create_label_map'.
+    
     Parameters
     ----------
-    original_image
-        Parent image
-    cropped_images
-        List of child images (cropped from parent)
+    label_image_shape
+        Shape of the label image
+    crop_rectangles
+        List of lists containing information about the cropped images,
+        s.a. label, top_left and bottom right position, and shape.
     key_words 
-        List of key_words defining the order of the
+        List of key_words defining the order of the crop_rectangles 
+        information.
     background_label 
         Label of the background
-        
+    
     Returns
     -------
     label_map
-        Map of labels
+        dictionary with keyword argument representing the labels,
+        and the corresponding values representing the single label 
+        map.
     """
     from scipy.ndimage import center_of_mass
-
-    # Set the value indices
-    kw_idxs = []
-    counter = 0
-    for kw in key_words:
-        if kw == "label": 
-            kw_idxs.append(counter)
-            counter += 1
-        else: 
-            kw_idxs.append([counter, counter+1])
-            counter += 2
-            
-    H, W = image_shape
+    
+    # Label map where overlapping regions are adjusted
     label_map = np.full(
-        shape = (H, W),
+        shape = label_image_shape,
         fill_value = background_label,
         dtype=np.int16
     )
-
-    # A master mask to restrict the second iteration 
-    # underneath
+    
+    # Covers/keep track of all the label regions (boolean).
     master_mask = np.zeros_like(
         label_map, 
         dtype=bool
     )
-
+    
     centers = {} # CoM
     masks = {} 
 
-    # Create rectangular masks and centers
+    # Create rectangular masks and save centers
     for rect in crop_rectangles:
 
-        label = rect[kw_idxs[key_words.index("label")]]
+        label = rect.get("label")
+
+        y0, x0 = rect.get("top_left")
+        y1, x1 = rect.get("bottom_right")
         
-        # Top-left coords.
-        y0 = rect[kw_idxs[key_words.index("top_left")][0]]
-        x0 = rect[kw_idxs[key_words.index("top_left")][1]]
-
-        # Bottom-right coords.
-        y1 = rect[kw_idxs[key_words.index("bottom_right")][0]]
-        x1 = rect[kw_idxs[key_words.index("bottom_right")][1]]
-
-        mask = np.zeros((H, W), dtype=bool)
+        mask = np.zeros(label_image_shape, dtype=bool)
         mask[y0:y1, x0:x1] = True
 
         # Key: label ID
@@ -427,8 +315,174 @@ def _create_label_map(
             label_map[y, x] = candidates[
                 int(np.argmin(distances))
                 ]
-
+                
     return label_map
+    
+def _create_label_map_by_distance_to_edge(
+    label_image_shape : tuple,
+    crop_rectangles : list[list],
+    background_label : int = -1
+) -> np.ndarray:
+    """Creates a label map of the cropped images. Overlapping label areas 
+    are resolved using center-of-mass distance. 
+    
+    Not meant to be used directly.
+    
+    See :func:'_create_label_map'.
+    
+    Parameters
+    ----------
+        Parameters
+    ----------
+    label_image_shape
+        Shape of the label image
+    crop_rectangles
+        List of lists containing information about the cropped images,
+        s.a. label, top_left and bottom right position, and shape.
+    key_words 
+        List of key_words defining the order of the crop_rectangles 
+        information.
+    background_label 
+        Label of the background
+        
+    Returns
+    -------
+    label_map
+        dictionary with keyword argument representing the labels,
+        and the corresponding values representing the single label 
+        map.
+    """
+    
+    # Label map where overlapping regions are adjusted
+    label_map = np.full(
+        shape = label_image_shape,
+        fill_value = background_label,
+        dtype=np.int16
+    )
+    
+    # Covers/keep track of all the label regions (boolean).
+    master_mask = np.zeros_like(
+        label_map, 
+        dtype=bool
+    )
+    
+    masks = {} 
+
+    # Create rectangular masks
+    for rect in crop_rectangles:
+
+        label = rect.get("label")
+        
+        y0, x0 = rect.get("top_left")
+        y1, x1 = rect.get("bottom_right")
+        
+        mask = np.zeros(label_image_shape, dtype=bool)
+        mask[y0:y1, x0:x1] = True
+
+        # Key: label ID
+        masks[label] = mask
+        master_mask[mask] = True
+
+    # Identified regions and assign labels
+    iters = np.where(master_mask)
+    
+    for y,x in zip(iters[0], iters[1]):
+        
+        # Identify candidates (single/overlaps)
+        candidates = [
+            label for label, mask in masks.items()
+            if mask[y, x]
+        ]
+        
+        # Set label:
+        if len(candidates) == 1:
+            label_map[y, x] = candidates[0]
+        
+        else:
+            # Resolve overlap by nearest edge
+            edge_distances = []
+
+            for label in candidates:
+
+                rect = crop_rectangles[label]
+
+                cy0, cx0 = rect.get("top_left")
+                cy1, cx1 = rect.get("bottom_right")
+                
+                d = min(
+                    y - cy0,
+                    cy1 - 1 - y,
+                    x - cx0,
+                    cx1 - 1 - x
+                )
+
+                edge_distances.append(d)
+            
+            # Minimum distance:
+            winner = candidates[int(np.argmin(edge_distances))]
+            
+            label_map[y, x] = winner
+            
+    return label_map
+    
+def _create_label_map(
+    image_shape : np.ndarray, 
+    crop_rectangles : list[list],
+    background_label : int = -1
+) -> np.ndarray:
+    """
+    Creates a label map of the cropped images. 
+
+    Parameters
+    ----------
+    original_image
+        Parent image
+    crop_rectangles
+        List of lists containing information about the cropped images,
+        s.a. label, top_left and bottom right position, and shape.
+    key_words 
+        List of key_words defining the order of the crop_rectangles order.
+    background_label 
+        Label of the background
+        
+    Returns
+    -------
+    label_map
+        Map of labels
+    """
+    
+    # Create label map
+    label_map = _create_label_map_com(
+        label_image_shape = image_shape,
+        crop_rectangles = crop_rectangles,
+        background_label = background_label
+    )
+    
+    # --- Check if labels are missing due to CoM approach ---
+    current_labels = np.unique(label_map)
+    current_labels = np.delete(
+        arr = current_labels, 
+        obj = np.where(current_labels == background_label)
+    )
+    expected_labels = np.asarray(
+        [x["label"] for x in crop_rectangles]
+    )
+
+    # ----- Check if labels have been removed: -------------
+    missing_labels = np.setdiff1d(
+        ar1 = expected_labels, 
+        ar2 = current_labels
+    )
+    
+    if len(missing_labels) != 0:
+        # ------------ Recover missing labels --------------
+        label_map = _create_label_map_by_distance_to_edge(
+            label_image_shape = image_shape,
+            crop_rectangles = crop_rectangles,
+            background_label = background_label
+        )
+
+    return label_map        
 
 def _map_particle_regions(
     childArray : np.ndarray,
@@ -436,7 +490,7 @@ def _map_particle_regions(
     parentOrder : np.ndarray | None = None,
     background_label : int = -1,
     nested_progressbar : bool = True
-):
+) -> np.ndarray:
     """Map the child arrays onto the parent arrays.
 
     Parameters
@@ -472,10 +526,18 @@ def _map_particle_regions(
                         "not supported.")
 
     # Future: determine dtype by childArray length
+    if np.iinfo(np.int16).min > len(childArray) > np.iinfo(np.int16).max:
+        exceptions.formatted_warning(
+            "Future fix: determine dtype from chilArray length."
+        )
+        dtype = np.int64
+    else:
+        dtype = np.int16
+        
     label_maps = np.full_like(
         a = parentArray, 
         fill_value = background_label,
-        dtype = np.int16
+        dtype = dtype
     )
     
     unique_parentOrder = np.unique(
@@ -514,14 +576,14 @@ def _map_particle_regions(
             use_labels = child_labels,
             progressbar = nested_progressbar
         )
-
+        
         # Label child array locations in the 'label_maps'
         label_maps[index] = _create_label_map(
             image_shape = shape,
             crop_rectangles = rectangles,
             background_label = background_label
         )
-        
+            
         # increment labels wrt. existing labels:
         if index != prev_index:
             label_maps[index][

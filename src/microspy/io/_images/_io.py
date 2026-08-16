@@ -118,14 +118,7 @@ def load_images(
             set_dtype = None 
 
     # Get file reader
-    try: 
-        file_reader = importlib.import_module(reader["api"]).file_reader
-        print("Delete this try-except in the module")
-    
-    except AttributeError:
-        file_reader = importlib.import_module(
-            reader["api"] + "._api"
-        ).file_reader
+    file_reader = importlib.import_module(reader["api"]).file_reader
     
     images = file_reader(
         filename,
