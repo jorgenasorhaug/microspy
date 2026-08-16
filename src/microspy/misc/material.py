@@ -345,3 +345,57 @@ def atomic_to_weight(
         )
     
     return _atomic_to_weight(atomic_percent, elements)
+    
+def get_xray_lines_near_energy(
+    energy : int | float, 
+    width : int | float = 0.2, 
+    min_line_weight : float = 0.5
+) -> list:
+    """
+    Find X-ray lines near a specific energy within the given energy window 
+    width.
+
+    This function is copied from eXSpy and slightly modified.
+
+    Parameters
+    ----------
+    energy
+        X-ray line energy to identify a corresponding line for.
+    width
+        Energy window width to search a line within, keV.
+    min_line_weight
+        Only include lines with a minimum weighting.
+
+    Returns
+    -------
+    xray_lines 
+        List of X-ray-lines sorted by energy difference to the given energy.
+
+    See also
+    --------
+    get_xray_lines, print_lines, print_lines_near_energy
+    """
+    from microspy.misc import element_database 
+    _elements_dict = element_database.as_dictionary()
+    del _elements_dict["__doc__"]
+    
+    valid_lines = []
+    E_min, E_max = energy - width / 2.0, energy + width / 2.0
+    
+    for element, el_props in _elements_dict.items():
+        # Not all elements in the DB have the keys, so catch KeyErrors
+        try:
+            lines = el_props["Atomic_properties"]["Xray_lines"]
+        except KeyError:
+            continue
+        for line, l_props in lines.items():
+            
+            line_energy = l_props["energy (keV)"]
+            line_weight = l_props.get("weight")
+            
+            if E_min <= line_energy <= E_max and line_weight > min_line_weight:
+                # Store line in Element_Line format, and energy difference
+                valid_lines.append((element + "_" + line, abs(line_energy - energy)))
+
+    # Sort by energy difference, but return only the line names
+    return [line for line, _ in sorted(valid_lines, key=lambda x: x[1])]

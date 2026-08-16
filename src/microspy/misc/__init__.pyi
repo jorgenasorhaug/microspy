@@ -18,7 +18,13 @@
 #
 
 from ._misc import GREEK_LETTERS, tabulate_data, save_tabulate_data
-from .material import weight_to_atomic, atomic_to_weight, ELEMENTS, element_database
+from .material import (
+    weight_to_atomic, 
+    atomic_to_weight, 
+    ELEMENTS, 
+    element_database,
+    get_xray_lines_near_energy
+)
 
 __all__ = [
     "GREEK_LETTERS", 
@@ -27,5 +33,6 @@ __all__ = [
     "weight_to_atomic",
     "atomic_to_weight",
     "ELEMENTS",
-    "element_database"   
+    "element_database",
+    "get_xray_lines_near_energy",
 ]
