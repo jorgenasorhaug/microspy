@@ -88,6 +88,64 @@ GREEK_LETTERS = {
     "Theta" : "\u03F4"
 }
 
+def create_colourbar(
+    colours : list | tuple | np.ndarray, 
+    labels : list[str, ...] | tuple[str, ...], 
+    width : int | float = 0.5, 
+    height_per_label : int | float = 1
+):
+    """
+    Create a colorbar-like figure using colored rectangles.
+
+    Parameters
+    ----------
+    colours : list
+        List of colors.
+    labels : list
+        List of labels corresponding to the colors.
+    width : float
+        Width of the color strip.
+    height_per_label : float
+        Height of each color segment.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    from matplotlib.patches import Rectangle
+    
+    if len(colours) != len(labels):
+        raise ValueError("colours and labels must have the same length")
+
+    n = len(colours)
+
+    fig, ax = plt.subplots(figsize=(3, n * height_per_label))
+
+    for i, (colour, label) in enumerate(zip(colours[::-1], labels[::-1])):
+        ax.add_patch(
+            Rectangle(
+                (0, i),
+                width,
+                1,
+                facecolor=colour,
+                edgecolor="black",
+            )
+        )
+
+        ax.text(
+            width + 0.1,
+            i + 0.5,
+            label,
+            va="center",
+            ha="left"
+        )
+
+    ax.set_xlim(0, width + 2)
+    ax.set_ylim(0, n)
+    ax.axis("off")
+
+    return fig
+
 def _vendor2ImAquisitionOrder(vendor : str | None):
     """Return the image acquisition order according to vendor.
 
