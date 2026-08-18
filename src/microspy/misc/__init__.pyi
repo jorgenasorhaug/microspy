@@ -21,7 +21,8 @@ from ._misc import (
     GREEK_LETTERS, 
     tabulate_data, 
     save_tabulate_data,
-    guess_ParentSig_navigation_grid_shape
+    guess_ParentSig_navigation_grid_shape,
+    create_colourbar
 )
 
 from .material import (
@@ -41,4 +42,5 @@ __all__ = [
     "ELEMENTS",
     "element_database",
     "get_xray_lines_near_energy",
+    "create_colourbar"
 ]
