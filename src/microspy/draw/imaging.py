@@ -200,6 +200,7 @@ def label2rgb(
     from copy import deepcopy
     from matplotlib.colors import to_rgb
     from skimage.color import label2rgb
+    from skimage.exposure import rescale_intensity
     from tabulate import tabulate
     from ._colouring import Closest_colorname
     
@@ -299,7 +300,13 @@ def label2rgb(
     
     coloured_map = label2rgb(
         label = label_map, 
-        image = underlay_image, 
+        image = rescale_intensity(
+            image = underlay_image,
+            in_range = (
+                np.min(underlay_image), 
+                np.max(underlay_image)
+            )
+        ), 
         colors = col_rgb, 
         bg_label = bkgr_label,
         bg_color = bkgr_colour,
