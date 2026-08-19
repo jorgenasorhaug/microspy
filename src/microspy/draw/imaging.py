@@ -345,8 +345,19 @@ def get_colourbar(
     bg_colour : str | tuple | list | np.ndarray | None = None,
     labels : list | tuple | np.ndarray | None = None,
 ):
-    """Create a "custom" (discrete) colour map colour bar. 
-
+    """Create a (discrete) colour bar for colour maps. 
+    
+    Parameters
+    ----------
+    colours : list
+        List of colors.
+    labels : list
+        List of labels corresponding to the colors.
+    width : float
+        Width of the color strip.
+    height_per_label : float
+        Height of each color segment.
+        
     Returns
     -------
     fig
