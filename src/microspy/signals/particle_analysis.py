@@ -209,32 +209,31 @@ class ParticleAnalysis:
                         "Acquisition_instrument.Acquisition.scale"
                     )
                 )
-
-                # Number density
-                particle_density = num_particles / scan_area
                 
                 cal_string = f"\nScan unit: {unit}\n"
                 
-                # np.format_float_position?
-                cal_string += f"Particle number density: {round(
-                    number = 100 * particle_density, 
-                    ndigits = int(
-                        str(particle_density).split('.')[1][0]
-                    ) + 1 
-                )} "
+                # Number density:
+                particle_density = num_particles / scan_area
                 
-                # Area density
+                stripped_digit = str(particle_density).split(".")[1].lstrip("0")
+                ndigits = str(particle_density).index(stripped_digit) + 1
+                cal_string += f"Particle number density: {round(
+                    number = particle_density, 
+                    ndigits = ndigits 
+                )} "
+                cal_string += f"1/{unit}\u00b2\n"
+                
+                # Area density:
                 area_index = self.Geometry.prop.index("Area")
                 area_density = np.sum(
-                    self.Geometry.data[area_index]
+                    self.Geometry.data[:,area_index]
                 ) / scan_area
                 
-                cal_string += f"1/{unit}\u00b2\n"
+                stripped_digit = str(area_density).split(".")[1].lstrip("0")
+                ndigits = str(area_density).index(stripped_digit) + 1
                 cal_string += f"Particle area density: {round(
                     number = 100 * area_density, 
-                    ndigits = int(
-                        str(area_density).split('.')[1][0]
-                    ) + 1
+                    ndigits = ndigits
                 )} %"
         
         pa_string = f"<Particle analysis, title: {self.metadata.General.title}, "
