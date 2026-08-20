@@ -353,15 +353,14 @@ class ParticleAnalysis:
                 f'Signals.{sig_type}', 
                 deepcopy(sig.metadata.get_item("Signal"))
             )
-        
-            sig._metadata = DictionaryTreeBrowser(
-                {
-                    "General" : {
-                        "title" : ""
-                    },
-                    "Signal" : sig.metadata.get_item(
-                        "Signal"
-                    ).as_dictionary(),
+
+            # Reinitialise signal:
+            sig.__init__(
+                data = sig.data,
+                **{
+                    "title" : sig.metadata.get_item("General.title"),
+                    "units" : sig.metadata.get_item("Signal.units"),
+                    "props" : sig.metadata.get_item("Signall.props")
                 }
             )
 
