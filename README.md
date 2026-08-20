@@ -1,5 +1,5 @@
 # microspy
-(Ideally called particleSpy, but it has already been taken...)
+(Ideally called particleSpy, but it was taken...)
 
 #### A HyperSpy-based analysis package for particle analysis
 
