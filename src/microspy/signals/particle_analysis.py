@@ -217,7 +217,7 @@ class ParticleAnalysis:
                 
                 # np.format_float_position?
                 cal_string += f"Particle number density: {round(
-                    number = particle_density, 
+                    number = 100 * particle_density, 
                     ndigits = int(
                         str(particle_density).split('.')[1][0]
                     ) + 1 
