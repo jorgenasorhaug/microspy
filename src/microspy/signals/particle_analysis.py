@@ -360,7 +360,7 @@ class ParticleAnalysis:
                 **{
                     "title" : sig.metadata.get_item("General.title"),
                     "units" : sig.metadata.get_item("Signal.units"),
-                    "props" : sig.metadata.get_item("Signall.props")
+                    "props" : sig.metadata.get_item("Signal.props")
                 }
             )
 
