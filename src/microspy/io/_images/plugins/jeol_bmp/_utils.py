@@ -92,10 +92,15 @@ def search_for_image_directory(
     else: 
         # Look for Experiment ID in the keywrods argument:
         exp_ID = kwargs.get("experiment_folder_ID")
-        if exp_ID < 10: exp_ID = f"0{exp_ID}"
+        if int(exp_ID) < 10: exp_ID = f"0{exp_ID}"
+        
+        subdir = f"{keyword}{exp_ID}"
         if exp_ID is not None:
             for _dir in _dirs:
-                if f"{keyword}{exp_ID}" in _dir: return _dir
+                if subdir in _dir: 
+                    # Returning "double" subdir because of "load_images"
+                    # ... should be fixed.
+                    return _dir
         
         # Raise Error if None were found:
         raise TypeError(

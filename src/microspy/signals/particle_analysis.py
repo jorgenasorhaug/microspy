@@ -909,7 +909,7 @@ class ParticleAnalysis:
                 
                 directory = Path(
                     directory_searcher(directory, **kwargs)
-                ).parent
+                )
     
             directory = str(directory)
             
