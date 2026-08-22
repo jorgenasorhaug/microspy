@@ -62,7 +62,8 @@ def _estimate_number_of_particles_based_on_folders(
 
 def search_for_image_directory(
     path : str,
-    keyword : str = "Sutb"
+    keyword : str = "Sutb",
+    **kwargs
 ) -> str:
     """Search for potential sub-directory where images are stored. If 
     multiple subdirectories are found with the keyword, an error will be
@@ -89,6 +90,14 @@ def search_for_image_directory(
     if len(_dirs) == 1: return _dirs[0]
     elif len(_dirs) == 0: return ""
     else: 
+        # Look for Experiment ID in the keywrods argument:
+        exp_ID = kwargs.get("experiment_folder_ID")
+        if exp_ID < 10: exp_ID = f"0{exp_ID}"
+        if exp_ID is not None:
+            for _dir in _dirs:
+                if f"{keyword}{exp_ID}" in _dir: return _dir
+        
+        # Raise Error if None were found:
         raise TypeError(
-            f"{len(_dirs)} potential directories were found. "
-            "Specify a directory to load correct images.")
+        f"{len(_dirs)} potential directories were found. "
+        "Specify a directory to load correct images.")

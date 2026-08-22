@@ -893,11 +893,22 @@ class ParticleAnalysis:
                 directory = os.path.split(directory)[0]
                 
                 print(f"Identified directory: <{directory}>")
+                
+                # Get experiment ID
+                exp = self.metadata.get_item(
+                    "Acquisition_instrument"
+                ).keys()
+                
+                for key in exp:
+                    if "Stub" in key:
+                        experiment = int(key.split("Stub")[-1])
+                
+                kwargs["experiment_folder_ID"] = experiment
     
                 directory_searcher = directory_searcher(vendor) 
-    
+                
                 directory = Path(
-                    directory_searcher(directory)
+                    directory_searcher(directory, **kwargs)
                 ).parent
     
             directory = str(directory)
