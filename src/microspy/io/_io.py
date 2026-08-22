@@ -48,6 +48,7 @@ for path in specification_paths:
 
 def load(
     filename : str,
+    experiment : int | None = None,
     **kwargs
 ):
     """Load particle analysis results such as chemical composition and 
@@ -59,6 +60,8 @@ def load(
     ----------
     filename
         filename of the csv file
+    experiment  
+        Experiment ID
     **kwargs
         Keyword arguments passed on to :class:'ParticleAnalysis'.
         Example: "images" : list of MicroSpySignal2D 
@@ -72,9 +75,9 @@ def load(
     
     Example
     -------
-    >> import microspy as ms
-    >> s = ms.load(filename)
-    >> s
+    >>> import microspy as ms
+    >>> s = ms.load(filename)
+    >>> s
     <Particle analysis, title: sample_name, dimensions: (131)>
     """
     # Avoiding circular import
@@ -109,7 +112,12 @@ def load(
     file_reader = importlib.import_module(reader["api"]).file_reader
     
     # Read data and metadata from file per experiment
-    signal_dicts = file_reader(filename) # list of experiments
+    kwargs["experiment"] = experiment
+    
+    signal_dicts = file_reader(
+        filename = filename,
+        **kwargs
+    ) # list of experiments
     
     # Iterate through experiments:
     if isinstance(signal_dicts, list):
@@ -250,14 +258,14 @@ def _save(
         
     Examples
     --------
-    >> import microspy as ms
-    >> s = ms.load(filename)
-    >> s
+    >>> import microspy as ms
+    >>> s = ms.load(filename)
+    >>> s
     <Particle analysis, title: title, dimensions: (131)>
     
-    >> s.save("new_filename.hdf5")
-    >> s1 = s.load("new_filename.hdf5")
-    >> s1
+    >>> s.save("new_filename.hdf5")
+    >>> s1 = s.load("new_filename.hdf5")
+    >>> s1
     <Particle analysis, title: title, dimensions: (131)>
     """
     filename = str(filename)

@@ -33,13 +33,18 @@ from microspy.io._utils import(
 
 MANUFACTURER : str = "Jeol"
 
-def file_reader(filename : str | Path):
+def file_reader(
+    filename : str | Path,
+    **kwargs
+):
     """Read particle analysis data from a csv file using pandas dataframe.
 
     Parameters
     ----------
     filename
         File path to dataframe file.
+    kwargs
+        "experiment" : int = [ID]
 
     Returns 
     -------
@@ -58,21 +63,30 @@ def file_reader(filename : str | Path):
     
     # Load pandas dataframe 
     file = pd.read_csv(filename)
-    # Alternative: 
+    # Alternative?: 
     # file = np.genfromtxt(..., delimiter=",",encoding="utf-8", names=True)
-    
 
-    # Get the stored metadata keys and values
-    # These are typically stored in the two first columns,
-    # the keys in first and the metadata in the second
+    # Get the stored metadata keys and values. These are typically stored 
+    # in the two first columns, the keys in first and the metadata in the 
+    # second
     mdk, mdv, pname = _get_metadata_from_jeol_csv_file(file)
-
-    # Set keys and values (originaL metadata) to a dictionary
-    omd = _lists_to_dict(mdk, mdv)
 
     # Get the particle data stored in the dataframe
     data, additional_data = _get_acquisition_data_from_file(file)
-
+    
+    experiment_number = kwargs.get("experiment")
+    if experiment_number is None: 
+        experiment_number = 1
+        
+    data, additional_data = _filter_experiment_data(
+        data = data,
+        additional_data = additional_data,
+        experiment_ID = experiment_number
+    )
+    
+    classification = additional_data.get("classification")
+    del additional_data["classification"]
+    
     # Update metadata
     md.update(
         {
@@ -82,7 +96,7 @@ def file_reader(filename : str | Path):
                 "manufacturer" : MANUFACTURER
             },
             "Sample" : {
-                "classes" : additional_data["classification"],
+                "classes" : classification,
             },
             "Acquisition_instrument" : {
                 "vendor" : MANUFACTURER,
@@ -90,27 +104,30 @@ def file_reader(filename : str | Path):
             "Additional_data" : additional_data
         }
     )
-    del additional_data["classification"]
 
-    # Iterate through all the stubs stored in the metadata; 
-    # these are separated by the keyword 'Stub name'
+    # Iterate through all the stubs stored in the metadata; these are 
+    # separated by the keyword 'Stub name'
     karr = np.where(mdk == "Stub name")[0]
     # The first instance is a general overview. Ignore this
-    for k in karr[1:]:
-        md["Acquisition_instrument"].update(
-            {
-                f"{mdv[k]}" : {
-                    "magnification" : mdv[k+1],
-                    "X_size[mm]" : mdv[k+2],
-                    "Y_size[mm]" : mdv[k+3],
-                    "reservation_area" : mdv[k+4],
-                    "reserved_views" : mdv[k+5],
-                    "analysed_area" : mdv[k+6],
-                    "analysed_views" : mdv[k+7],
-                    "acquisition_time" : mdv[k+8]
-                }
+    #for k in karr[1:]:
+    k = karr[experiment_number]
+    md["Acquisition_instrument"].update(
+        {
+            f"{mdv[k]}" : {
+                "magnification" : mdv[k+1],
+                "X_size[mm]" : mdv[k+2],
+                "Y_size[mm]" : mdv[k+3],
+                "reservation_area" : mdv[k+4],
+                "reserved_views" : mdv[k+5],
+                "analysed_area" : mdv[k+6],
+                "analysed_views" : mdv[k+7],
+                "acquisition_time" : mdv[k+8]
             }
-        )
+        }
+    )
+    
+    # Set keys and values (here: original metadata) to a dictionary
+    omd = _lists_of_omd_to_dict_of_omd(mdk, mdv)
     
     # Set the metadata and the data
     acquisition["metadata"] = md
@@ -134,7 +151,80 @@ def file_reader(filename : str | Path):
     acquisition["axes"] = axes
     
     return [acquisition]
+
+def _filter_experiment_data(
+    data : dict,
+    additional_data : dict | None,
+    experiment_ID : int | None = None,
+) -> list[dict, dict | None, np.ndarray]:
+    """Extract the data (and additional data) corresponding to a specific
+    experiment ID (integer).
     
+    Not meant to be used directly.
+    
+    Parameters
+    ----------
+    data
+        All data 
+    additional_data
+        All additional data.
+    experiment_ID
+        ID of the experiment. If None, all data is returned.
+        
+    Returns
+    -------
+    data
+        dictionary with data of interest corresponding to the experiment ID.
+    additional_data
+        dictionary with additional data corresponding to the experiment ID.
+    """
+    
+    # label names are always strings:
+    label_name_index = additional_data.get("keywords").index("Label name")
+    label_names = [
+        labName for labName in additional_data.get("data")[
+            :, label_name_index
+        ]
+        if type(labName) == str
+    ]
+    
+    # Sometimes metadata is longer than data --> nan will appear in arrays.
+    # Remove these:
+    filter_mask = np.asarray(
+        [
+            True if type(labName) == str else False
+            for labName in additional_data["data"][:,1]
+        ]
+)   
+    # Filter all data:
+    for key in data.keys():
+        data[key]["data"] = data[key]["data"][filter_mask]
+    additional_data["data"] = additional_data["data"][filter_mask]
+    additional_data["classification"] = additional_data[
+        "classification"
+    ][filter_mask]
+    
+    if experiment_ID is None: 
+        experiment_mask = filter_mask[np.where(filter_mask)]
+    
+    else:
+        # Get data corresponding to experiment of interest:
+        experiment_mask = np.asarray(
+            [
+                True if f"Stub{experiment_ID}" in label_name else False 
+                for label_name in label_names
+            ]
+        )
+    
+    # Filter experiment data:
+    for key in data.keys():
+        data[key]["data"] = data[key]["data"][experiment_mask]
+    additional_data["data"] = additional_data["data"][experiment_mask]
+    additional_data["classification"] = additional_data[
+        "classification"
+    ][experiment_mask]
+    
+    return data, additional_data
 
 def _get_acquisition_data_from_file(
     file : pd.core.frame.DataFrame,
@@ -267,8 +357,7 @@ def _get_acquisition_data_from_file(
         if u != "":
             prop[prop.index(p)] = p.replace(f" {u}", "")
         
-    # Store as dictionary instead?
-    #geometry = _lists_to_dict(prop, [np.asarray(file[geom]) for geom in prop])
+    # Set geometric data
     data['geometry'] = {
         'props' : prop,
         'data' : values,
@@ -347,7 +436,7 @@ def _get_metadata_from_jeol_csv_file(
     
     return mdk, mdv, pname
 
-def _lists_to_dict(
+def _lists_of_omd_to_dict_of_omd(
     keys : list, 
     values : list
 ) -> dict:
@@ -373,8 +462,17 @@ def _lists_to_dict(
 
     dictionary = {}
     
-    for key, val in zip(keys, values): dictionary[key] = val
-
+    new_dict = False
+    for key, val in zip(keys, values): 
+        if key == "Stub name":
+            new_dict = True
+            keyword = val
+            dictionary[keyword] = dict()
+        if new_dict:
+            dictionary[keyword][key] = val
+        else:
+            dictionary[key] = val
+    
     return dictionary
 
 def file_writer(
