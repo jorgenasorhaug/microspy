@@ -73,7 +73,7 @@ def file_reader(
         path = folder,
         keyword = subdir_keyword
     ) # This list contains only the next subdir(s).
-
+    
     out = []
     set_dtype = kwargs.get("set_dtype")
     
@@ -319,6 +319,9 @@ def _load_particle_images(
     # Image indexer
     p = 0
     
+    # In case no particle images were acquired:
+    particle_images = None
+    
     for fol in tqdm_notebook(
         folders, 
         desc = "Child Images",
@@ -381,8 +384,8 @@ def _load_particle_images(
     
                 particle_images[p, :shape[0], :shape[1]] = tmp.copy()
             p += 1
-
-    if centre_particle_images:
+    
+    if centre_particle_images and particle_images is not None:
 
         # Centre of the particle image array:
         p_im_centre = np.round(
@@ -415,6 +418,9 @@ def _load_particle_images(
             particle_images[i].fill(0)
             particle_images[i] = empty_pIm.copy()
             empty_pIm.fill(0) 
+    
+    if particle_images is None:
+        return []
 
     if set_dtype is not None: 
         if not values_change_after_dtype_change(
