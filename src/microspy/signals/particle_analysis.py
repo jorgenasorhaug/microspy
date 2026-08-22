@@ -850,9 +850,9 @@ class ParticleAnalysis:
             the images.
 
         keyword arguments:
-            read_particle_images : bool,
-            centre_particle_images : bool,
-            set_dtype : dtype
+            set_dtype : dtype = None
+            read_CompositeSig : bool = False,
+            centre_particle_images : bool = True 
         """ 
         from microspy.io._images import _io
 
