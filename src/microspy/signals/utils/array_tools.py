@@ -23,6 +23,102 @@ from microspy.misc import exceptions
 allowed_hor_dirs = ("l2r", "r2l")
 allowed_vert_dirs = ("t2b", "b2t")
 
+def depad_arrays(
+    arr : np.ndarray,
+    **kwargs
+) -> list[np.ndarray, ...]:
+    """Depad 3 dimensional arrays and return a list of depadded arrays.
+
+    Parameters
+    ----------
+    arr
+        Array to depad.
+    kwargs
+        keyword argument passed on to :func:'depad_array'.
+
+    Returns
+    -------
+    depadded
+        List of depadded arrays.
+    """
+
+    ndim = np.ndim(arr)
+    
+    if ndim < 2 or ndim > 3:
+        raise AttributeError(f"Array of dimension {ndim} "
+                "is not supported.")
+        
+    depadded = []
+
+    for a in arr:
+        depadded.append(
+            depad_array(a, **kwargs)
+        )
+
+    return depadded   
+
+def depad_array(
+    arr : np.ndarray,
+    **kwargs
+) -> np.ndarray:
+    """Depad 2-dimensional array.
+
+    Parameters
+    ----------
+    arr
+        Array to depad.
+    kwargs
+        empty edges properties; The function looks for 'empty_value' keyword
+        to pass on to :func:'_crop_away_empty_edges'. 
+
+    Returns
+    -------
+    depadded
+        Depadded array.
+    """
+    ndim = np.ndim(arr)
+    
+    if ndim != 2:
+        raise AttributeError(f"Array of dimension {ndim} "
+                             "is not supported.")
+    
+    empty_val = kwargs.get("empty_value")
+    if empty_val is None:
+        empty_val = 0.0
+    
+    return _crop_away_empty_edges(arr = arr, empty_value = empty_val)
+
+def _crop_away_empty_edges(
+    arr : np.ndarray,
+    empty_value : int | float = 0.0
+) -> np.ndarray:
+    """Crop away empty edges from an array.
+    
+    Parameters
+    ----------
+    arr
+        Array to remove empty edges from.
+    empty_value 
+        Value considered empty and will be removed from the returned array.
+    
+    Returns
+    -------
+    arr
+        Array with empty edges removed    
+    """
+    # Identify the not-padded area
+    y0, x0 = np.where(arr > empty_value)
+    
+    if len(y0) > 0: 
+        y00,y01 = y0.min(), y0.max()+1
+        arr = arr[y00:y01,:]
+        
+    if len(x0) > 0: 
+        x00,x01 = x0.min(), x0.max()+1
+        arr = arr[:,x00:x01]
+    
+    return arr
+
 def _3Darray_2_4Darray(
     arr : np.ndarray, 
     to_shape : list | tuple, 

@@ -306,7 +306,7 @@ def label2rgb(
                 np.min(underlay_image), 
                 np.max(underlay_image)
             )
-        ), 
+        ) if underlay_image is not None else None, 
         colors = col_rgb, 
         bg_label = bkgr_label,
         bg_color = bkgr_colour,
