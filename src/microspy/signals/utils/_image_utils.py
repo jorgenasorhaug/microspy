@@ -256,7 +256,6 @@ def _create_label_map_com(
         and the corresponding values representing the single label 
         map.
     """
-    from scipy.ndimage import center_of_mass
     
     # Label map where overlapping regions are adjusted
     label_map = np.full(
@@ -312,13 +311,37 @@ def _create_label_map_com(
                 np.hypot(y - centers[l][0], x - centers[l][1])
                 for l in candidates
             ]
-            label_map[y, x] = candidates[
-                int(np.argmin(distances))
+            
+            # candidates: labels
+            # distances: list of distance to CoM
+            """counts = Counter(list(centers.values()))
+            maxCount = np.max(list(counts.values()))
+            # If multiple label regions have a common CoM:
+            if maxCount == 2:
+                # Favour the label region with the smallest area:
+                area = [
+                    np.sum(masks[l]) for l in candidates
                 ]
+                label_map[y, x] = candidates[
+                    int(
+                        np.argmin(area)
+                    )
+                ]
+            elif maxCount > 2:
+                exceptions.formatted_warning(
+                    "More than two label regions with common CoM has not "
+                    "been considered yet."
+                )
+            else:"""
+            label_map[y, x] = candidates[
+                int(
+                    np.argmin(distances)
+                )
+            ]
                 
     return label_map
     
-def _create_label_map_by_distance_to_edge(
+def _create_label_map_by_minimum_area(
     label_image_shape : tuple,
     crop_rectangles : list[list],
     background_label : int = -1
@@ -332,8 +355,6 @@ def _create_label_map_by_distance_to_edge(
     
     Parameters
     ----------
-        Parameters
-    ----------
     label_image_shape
         Shape of the label image
     crop_rectangles
@@ -344,7 +365,7 @@ def _create_label_map_by_distance_to_edge(
         information.
     background_label 
         Label of the background
-        
+    
     Returns
     -------
     label_map
@@ -366,13 +387,14 @@ def _create_label_map_by_distance_to_edge(
         dtype=bool
     )
     
+    centers = {} # CoM
     masks = {} 
 
-    # Create rectangular masks
+    # Create rectangular masks and save centers
     for rect in crop_rectangles:
 
         label = rect.get("label")
-        
+
         y0, x0 = rect.get("top_left")
         y1, x1 = rect.get("bottom_right")
         
@@ -382,6 +404,9 @@ def _create_label_map_by_distance_to_edge(
         # Key: label ID
         masks[label] = mask
         master_mask[mask] = True
+
+        # Key: label
+        centers[label] = center_of_mass(mask)
 
     # Identified regions and assign labels
     iters = np.where(master_mask)
@@ -394,35 +419,18 @@ def _create_label_map_by_distance_to_edge(
             if mask[y, x]
         ]
         
-        # Set label:
-        if len(candidates) == 1:
-            label_map[y, x] = candidates[0]
+        # Favour the label region with the smallest area:
+        area = [
+            np.sum(masks[l]) for l in candidates
+        ]
         
-        else:
-            # Resolve overlap by nearest edge
-            edge_distances = []
-
-            for label in candidates:
-
-                rect = crop_rectangles[label]
-
-                cy0, cx0 = rect.get("top_left")
-                cy1, cx1 = rect.get("bottom_right")
-                
-                d = min(
-                    y - cy0,
-                    cy1 - 1 - y,
-                    x - cx0,
-                    cx1 - 1 - x
-                )
-
-                edge_distances.append(d)
-            
-            # Minimum distance:
-            winner = candidates[int(np.argmin(edge_distances))]
-            
-            label_map[y, x] = winner
-            
+        # Set label regions
+        label_map[y, x] = candidates[
+            int(
+                np.argmin(area)
+            )
+        ]
+        
     return label_map
     
 def _create_label_map(
@@ -476,7 +484,7 @@ def _create_label_map(
     
     if len(missing_labels) != 0:
         # ------------ Recover missing labels --------------
-        label_map = _create_label_map_by_distance_to_edge(
+        label_map = _create_label_map_by_minimum_area(
             label_image_shape = image_shape,
             crop_rectangles = crop_rectangles,
             background_label = background_label
