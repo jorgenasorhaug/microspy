@@ -28,6 +28,8 @@ from tqdm import tqdm_notebook as tqdm
 from hyperspy._signals.signal1d import Signal1D
 from hyperspy._signals.signal2d import Signal2D
 
+from microspy.misc import exceptions
+
 PLUGINS : list = []
 WRITE_EXTENSIONS : list = []
 PARTSi = 5
@@ -112,7 +114,11 @@ def load(
     file_reader = importlib.import_module(reader["api"]).file_reader
     
     # Read data and metadata from file per experiment
-    kwargs["experiment"] = experiment
+    exceptions.formatted_warning(
+        "Fix a better solution for 'experiments' -> kwargs during load?"
+    )
+    if extension in ("csv"):
+        kwargs["experiment"] = experiment
     
     signal_dicts = file_reader(
         filename = filename,
