@@ -32,6 +32,8 @@ from microspy.io._utils import(
 )
 
 MANUFACTURER : str = "Jeol"
+format_name = "jeol_csv"
+file_extensions = ["csv"]
 
 def file_reader(
     filename : str | Path,
@@ -490,8 +492,8 @@ def file_writer(
     
     filename = str(filename)
     ext = os.path.splitext(filename)[-1].replace(".","").lower()
-    if ext == "": ext = "csv"
-    elif ext != "csv":
+    if ext == "": ext = file_extensions[0]
+    elif ext not in file_extensions:
         IOError(f"File extension {ext} is not supported.")
         
     filename = os.path.splitext(filename)[0] + "." + ext
