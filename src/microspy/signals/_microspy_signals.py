@@ -2047,7 +2047,7 @@ class Images:
                 # Mean number of particles per image:
                 nested_progressbar = len(childArr) / len(
                     np.unique(parentOrder)
-                ) > 10
+                ) > 200
             else:
                 # Tot. number of particles
                 nested_progressbar = len(childArr) > 500
