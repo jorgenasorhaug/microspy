@@ -1066,10 +1066,9 @@ class MicroSpySignal2D_Parent(MicroSpySignal2D):
     
     @property
     def is_gridified(self):
-        """Check if the signal is gridified, i.e. the data 
-        dimension is 4. 
+        """Check if the signal is gridified, i.e. the data dimension is 4. 
         """
-        return len(self.data.shape) == 4 
+        return np.ndim(self.data) > 3 
         
     # ---------------------------------------------------------------- #
     # ------------------------- Open methods ------------------------- #
