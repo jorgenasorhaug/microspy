@@ -69,8 +69,6 @@ def file_reader(
     filename
         Full path of hdf5 file.
     """
-    exceptions.formatted_warning("Multiple experiments not yet supported.")
-
     with File(filename, mode = "r", **kwargs) as f:
         file_dict = hdf5group2dict(f["/"], recursive=True)
     return dict2microspyList(file_dict)
