@@ -51,9 +51,6 @@ def file_reader(
     acquisition
         [particle chemistry, particle geometry, and original metadata]
     """
-
-    exceptions.formatted_warning("Multiple stubs has not been tested yet!")
-
     # Data dictionary
     acquisition = {}
     # metadata dictionary
