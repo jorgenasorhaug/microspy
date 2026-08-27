@@ -264,9 +264,13 @@ def _load_view_images(
             view_images[idx] = first_im
             first = False
 
-        else: view_images[idx] = plt.imread(
-            path / fol / image_filename
-        ).astype(set_dtype)
+        else: 
+            try:
+                view_images[idx] = plt.imread(
+                    path / fol / image_filename
+                ).astype(set_dtype)
+            except FileNotFoundError:
+                view_images[idx] = np.zeros_like(view_images[idx]-1)
 
     return view_images
 
