@@ -14,6 +14,8 @@
 # along with microspy. If not, see <http://www.gnu.org/licenses/>.
 
 from .io._io import load
+from .io._images._io import load_images
+
 from . import (
     signals,
     data,
@@ -26,6 +28,7 @@ from . import (
 __all__ = [
     # Functions
     "load",
+    "load_images",
 
     # Modules
     "signals",
