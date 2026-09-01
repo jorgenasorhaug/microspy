@@ -1,9 +1,8 @@
 # microspy
-(Ideally called particleSpy, but it was taken...)
 
-#### A HyperSpy-based analysis package for particle analysis
+#### A HyperSpy-based analysis package for particle and SEM image analysis
 
-The intention with this python package is to have an alternative analysis tool for analysing particles' geometry and composition acquired using (currently) Jeol's Particle Analysis software: https://www.jeolusa.com/PRODUCTS/Elemental-Analysis/Embedded-EDS-for-SEM/Particle-Analysis-3.
+The intention with this python package is to have an off-line workflow for analysing particles (geometry and composition) acquired using (currently) Jeol's Particle Analysis software: https://www.jeolusa.com/PRODUCTS/Elemental-Analysis/Embedded-EDS-for-SEM/Particle-Analysis-3. However, it is also suitable to analyse SEM images e.g. acquired in e.g. a grid. 
 
 [How to install](#how-to-install "How to install") - 
 [How to use](#how-to-use "How to use") - 
