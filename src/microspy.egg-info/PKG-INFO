@@ -1,0 +1,59 @@
+Metadata-Version: 2.4
+Name: microspy
+Version: 0.1.0
+Summary: Particle and image analysis with the HyperSpy framework
+Maintainer-email: Jørgen Sørhaug <jorgen.sorhaug@proton.me>
+Keywords: python,hyperspy,exspy,data analysis,microscopy,electron microscopy,scanning electron microscopy,energy-dispersive X-ray spectroscopy,X-ray energy-dispersive spectroscopy,EDS,EDX,SEM
+Classifier: Intended Audience :: Science/Research
+Classifier: Natural Language :: English
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Scientific/Engineering :: Physics
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: hyperspy>=2.4.0
+Requires-Dist: h5py>=2.10
+Requires-Dist: matplotlib>=3.11.0
+Requires-Dist: numpy>=2.5.0
+Requires-Dist: pandas>=2.2.3
+Requires-Dist: scikit-image>=0.26.0
+Requires-Dist: scikit-learn
+Requires-Dist: scipy>=1.18.0
+Requires-Dist: tabulate>=0.10.0
+Requires-Dist: tqdm>=4.68.3
+Provides-Extra: all
+Requires-Dist: exspy>=0.3.0; extra == "all"
+Provides-Extra: tests
+Requires-Dist: pytest>=8; extra == "tests"
+Provides-Extra: coverage
+Requires-Dist: pytest-cov>=7; extra == "coverage"
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: pytest-cov>=7; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Dynamic: license-file
+
+# microspy
+
+#### A HyperSpy-based analysis package for particle and SEM image analysis
+
+The intention with this python package is to have an off-line workflow for analysing particles (geometry and composition) acquired using (currently) Jeol's Particle Analysis software: https://www.jeolusa.com/PRODUCTS/Elemental-Analysis/Embedded-EDS-for-SEM/Particle-Analysis-3. However, it is also suitable to analyse SEM images e.g. acquired in e.g. a grid. 
+
+[How to install](#how-to-install "How to install") - 
+[How to use](#how-to-use "How to use") - 
+[Documentation](#documentation "Documentation") - 
+
+## How to install
+* microspy can be installed using pip:
+```
+>> conda create --name microspy
+>> conda activate microspy
+>> conda install git pip
+>> pip install git+https://github.com/jorgenasorhaug/microspy.git
+```
+
+## How to use
+* To start the example notebook, use jupyter lab or jupyter notebook
+
+## Documentation
+* For information, see ...
