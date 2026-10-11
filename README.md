@@ -11,10 +11,10 @@ The intention with this python package is to have an off-line workflow for analy
 ## How to install
 * microspy can be installed using pip:
 ```
->> conda create --name microspy
->> conda activate microspy
->> conda install git pip
->> pip install git+https://github.com/jorgenasorhaug/microspy.git
+>>> conda create --name microspy
+>>> conda activate microspy
+>>> conda install git pip
+>>> pip install git+https://github.com/jorgenasorhaug/microspy.git
 ```
 
 ## How to use
