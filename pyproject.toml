@@ -9,10 +9,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "microspy"
 version = "0.1.0"
-description = "Particle analysis with the HyperSpy framework"
-maintainers = [{name = "Jørgen Sørhaug", email = "jorgen.sorhaug@gmail.com"}]
+description = "Particle and image analysis with the HyperSpy framework"
+maintainers = [{name = "Jørgen Sørhaug", email = "jorgen.sorhaug@proton.me"}]
 requires-python = ">=3.12"
 readme = "README.md"
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 keywords=[
     "python",
     "hyperspy",
@@ -29,7 +35,7 @@ keywords=[
 ]
 dependencies = [
     "hyperspy         >= 2.4.0",
-    "lazy_loader",
+    "h5py             >= 2.10",
     "matplotlib       >= 3.11.0",
     "numpy            >= 2.5.0",
     "pandas           >= 2.2.3",
@@ -39,7 +45,21 @@ dependencies = [
     "tabulate         >= 0.10.0",
     "tqdm             >= 4.68.3",
 ]
-
+[project.optional-dependencies]
+all = [
+    "exspy            >= 0.3.0"
+]
+tests = [
+    "pytest>=8",
+]
+coverage = [
+    "pytest-cov>=7",
+]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=7",
+    "ruff",
+]
 # ------------------------------- Tool ------------------------------- #
 
 
@@ -50,3 +70,15 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["microspy"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+
+[project.urls]
