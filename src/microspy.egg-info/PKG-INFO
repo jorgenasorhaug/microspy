@@ -14,7 +14,7 @@ License-File: LICENSE
 Requires-Dist: hyperspy>=2.4.0
 Requires-Dist: h5py>=2.10
 Requires-Dist: matplotlib>=3.11.0
-Requires-Dist: numpy>=2.5.0
+Requires-Dist: numpy>=2.4.0
 Requires-Dist: pandas>=2.2.3
 Requires-Dist: scikit-image>=0.26.0
 Requires-Dist: scikit-learn
