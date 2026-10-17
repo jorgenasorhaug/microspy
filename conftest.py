@@ -88,7 +88,7 @@ def dummy_signal(
     # 3 particles with 5 geometric properties each
     geomArr = np.array(
         [
-            [9, 1, 44, 63, 29, 45, 18, 83, 7, 84, 83, 10, 95, 23, 23]
+            9, 1, 44, 63, 29, 45, 18, 83, 7, 84, 83, 10, 95, 23, 23
         ]
     ).reshape(num_particles, num_geometric_props)
     
