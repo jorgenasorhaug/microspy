@@ -25,19 +25,20 @@ from pathlib import Path
 from tqdm import tqdm_notebook
 from hyperspy.misc import utils
 
-from microspy.signals._microspy_signals import (
-    MicroSpySignal2D, 
-    MicroSpySignal2D_Parent,
-    Images,
-    MicroSpySignal1D,
-    MicroSpySignal1D_Chemistry, 
-    MicroSpySignal1D_Geometry,
-    Images_signals
-)
 from microspy.io._io import _save
 from microspy.io._images._utils import ALLOWED_VENDORS as ALLOWED_IMAGE_VENDORS
 from microspy.misc import exceptions, ELEMENTS
-
+from microspy.signals._microspy_signals1D import (
+    MicroSpySignal1D,
+    MicroSpySignal1D_Chemistry, 
+    MicroSpySignal1D_Geometry,
+)
+from microspy.signals._microspy_signals2D import (
+    MicroSpySignal2D, 
+    MicroSpySignal2D_Parent,
+    Images,
+    Images_signals
+)
 
 IMAGES_SIGNAL_TYPES = {
     "CompositeSig" : MicroSpySignal2D, #Overview/stitched im.
@@ -177,7 +178,6 @@ class ParticleAnalysis:
         
     def __repr__(self): 
         # Nice printing of information 
-        
         exceptions.formatted_warning(
             "OBS! Mutliple stubs has not been tested yet!"
         )
@@ -417,7 +417,7 @@ class ParticleAnalysis:
             
     def _set_Images(
         self,
-        images : list(list, ...)
+        images: list(list | np.ndarray, ...)
     ):
         """Set list of MicroSpySignal2D signals to an Images class and 
         set the class as an attribute.
@@ -429,6 +429,9 @@ class ParticleAnalysis:
         the images list > 1, multiple Images class will be attributed to
         this class and labelled according to the experiment (same order as 
         the images list order).
+        
+        Parameters
+        ----------
 
         images
             list of lists with MicroSpySignal2D classes.
@@ -480,12 +483,10 @@ class ParticleAnalysis:
         """
         
         if not hasattr(self, "Chemistry"):
-            
             raise AttributeError(
                     "The class has no 'Chemistry' signal attribute."
                 )
         else:
-            
             if np.max(threshold) > 0.25 * np.max(self.Chemistry.data):
                 exceptions.formatted_warning(
                     "The used threshold is > 25% of the maximum composition."
@@ -501,11 +502,13 @@ class ParticleAnalysis:
                     )
                     elements, threshold = list(zip(*elements.items()))
                     elements, threshold = list(elements), list(threshold)
+                
                 else:
                     elements = list(elements)
 
                 # Check if the provided elements exists:
                 diff = set(elements) - set(ELEMENTS)
+                
                 if len(diff) > 0:
                     raise exceptions.InputError(
                             f"Element(s) '{list(diff)}' does/do not exist."
@@ -514,6 +517,7 @@ class ParticleAnalysis:
                 # Check if the provided elements have been detected:
                 particle_elements = list(self.elements)
                 diff = set(elements) - set(particle_elements)
+                
                 if len(diff) > 0:
                     exceptions.formatted_warning(
                             f"Element(s) '{list(diff)}' has/have not been detected "
@@ -539,10 +543,10 @@ class ParticleAnalysis:
                     self.Chemistry.metadata.get_item("Signal")
                 )
             
-    def filter_by_elements(
+    def filter_particles_by_elements(
         self,
-        elements : list | tuple | str,
-        mode : str = "only",
+        elements: list | tuple | str,
+        mode: str = "only",
     ) -> np.ndarray:
         """Get particles that match the provided element conditions, like 
         particles with specific elements (exclusively), or particles with 
@@ -596,6 +600,7 @@ class ParticleAnalysis:
                   f"'{np.unique(self._particle_classes)}' -> "
                   f"{np.unique(self._original_classes)}")
             labels = self._original_classes
+        
         else:
             print("Setting the currently unique particle classes "
                   f"'{np.unique(self._particle_classes)}' -> "
@@ -641,7 +646,7 @@ class ParticleAnalysis:
         
         >>> s.particle_classes
         array(['Unclassified', 'Unclassified', 'Classified', ...,
-       'Unclassified', 'Classified', 'Unclassified'], dtype=object)
+        'Unclassified', 'Classified', 'Unclassified'], dtype=object)
         
         >>> # Classify all 'Unclassified' particles using single label string
         >>> s.classify_particles(~s.is_classified, labels = 'Classified')
@@ -891,7 +896,6 @@ class ParticleAnalysis:
                     "General.original_filename"
                 ) 
                 directory = os.path.split(directory)[0]
-                
                 print(f"Identified directory: <{directory}>")
                 
                 # Get experiment ID
@@ -966,18 +970,16 @@ class ParticleAnalysis:
         :func:'microspy.misc._misc._vendor2ImFlipAxes'
         """
         if not hasattr(self, "Images"):
-
             raise AttributeError("The signal does not keep "
                                 "track of images. See "
                                 "the function *.load_images().")
 
         if flip_axes is None:
-            
             from microspy.misc._misc import _vendor2ImFlipAxes
 
-            vendor = self.metadata.Acquisition_instrument.get_item("vendor")        
+            vendor = self.metadata.get_item("Acquisition_instrument.vendor")        
             flip_axes = _vendor2ImFlipAxes(vendor)
-            
+
             self.Images.gridify_ParentSig(
                 nav_shape = navigation_shape,
                 flip_axes = flip_axes
@@ -1007,12 +1009,11 @@ class ParticleAnalysis:
                                 "the function *.load_images().")
 
         if flip_axes is None:
-            
             from microspy.misc._misc import _vendor2ImFlipAxes
             
-            vendor = self.metadata.Acquisition_instrument.get_item("vendor")
+            vendor = self.metadata.get_item("Acquisition_instrument.vendor")
             flip_axes = _vendor2ImFlipAxes(vendor)
-        
+
         self.Images.degridify_ParentSig(
             flip_axes = flip_axes
         )

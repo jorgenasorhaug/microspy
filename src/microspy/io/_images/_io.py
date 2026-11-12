@@ -27,7 +27,7 @@ from pathlib import Path
 from microspy.io._utils import (
     _identify_subdirectories_of_interest
 )
-from microspy.signals._microspy_signals import (
+from microspy.signals._microspy_signals2D import (
     MicroSpySignal2D,
     MicroSpySignal2D_Parent,
 )
@@ -82,7 +82,7 @@ def load_images(
             np.ndarray representing the individual 
             particle images
     """
-    from microspy.signals._microspy_signals import (
+    from microspy.signals._microspy_signals2D import (
         Images_signals
     )
 
@@ -144,7 +144,6 @@ def load_images(
                         "Signal" : {"signal_type" : imtype}
                     }
             }
-            
             if sig_type == list(Images_signals.values())[1]:
                 im = MicroSpySignal2D_Parent(im, **md)
             else:

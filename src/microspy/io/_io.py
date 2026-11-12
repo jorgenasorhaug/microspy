@@ -230,7 +230,7 @@ def _assign_signal_subclass(
     -------
     signal_subclass
     """
-    from microspy.signals._microspy_signals import (
+    from microspy.signals._microspy_signals1D import (
         MicroSpySignal1D, 
         MicroSpySignal1D_Chemistry, 
         MicroSpySignal1D_Geometry

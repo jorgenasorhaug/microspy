@@ -163,7 +163,8 @@ def _3Darray_2_4Darray(
     N, H, W = arr.shape
 
     assert N == np.prod(to_shape)
-
+    
+    # Reshaping grid:
     grid = np.reshape(arr, to_shape + (H, W))
 
     if flip_axis is not None: 
@@ -186,13 +187,13 @@ def _3Darray_2_4Darray(
                         message = _exception
                     )
                     
-                    return grid
+                    return arr
     
                 else:
                     
                     raise AttributeError("Axis flipping along axis "
                                      f"{flip} is not supported.")
-            
+
             grid = np.flip(grid, flip)
 
     return grid
@@ -218,7 +219,7 @@ def _4Darray_2_3Darray(
     degrid
         Reshaped array into 3D grid.
     """
-    #print("4->3: ", flip_axis)
+
     Y,X,H,W = arr.shape
     new_shape = (Y * X,) + (H, W)
     degrid = arr
@@ -233,13 +234,11 @@ def _4Darray_2_3Darray(
                 if flip is None:
                     _exception = f"Flip argument {flip} is not supported. "
                     _exception += "Returning unflipped array."
-                    
                     exceptions.formatted_warning(
                         message = _exception
                     )
                     
                     return degrid
-    
                 else:
                     raise AttributeError("Axis flipping along axis "
                                      f"{flip} is not supported.")

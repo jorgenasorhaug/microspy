@@ -142,7 +142,7 @@ def _vendor2ImFlipAxes(vendor : str):
         if vendor.lower() == "jeol":
             return (1,)
     else:
-        return None, None
+        return None
     
 def tabulate_data(
     data : np.ndarray, 
